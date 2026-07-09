@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with level, experience points, typing speed, and country statistics.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique identifier for the user" },
+        "displayName": { "type": "string", "description": "Full name of the user" },
+        "email": { "type": "string", "description": "Google account email" },
+        "avatar": { "type": "string", "description": "Visual character or icon selected by the user" },
+        "username": { "type": "string", "description": "Display name of the user" },
+        "country": { "type": "string", "description": "ISO Country code like UZ" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Profile registration date" },
+        "bestWPM": { "type": "integer", "description": "The highest Words Per Minute recorded" },
+        "averageWPM": { "type": "integer", "description": "Mathematical mean of WPM across all tests" },
+        "accuracy": { "type": "number", "description": "Average character accuracy percentage" },
+        "testsCompleted": { "type": "integer", "description": "Number of successfully completed typing tests" },
+        "level": { "type": "integer", "description": "Experience tier of the user" },
+        "xp": { "type": "integer", "description": "Accumulated experience points" },
+        "lastOnline": { "type": "string", "format": "date-time", "description": "Last timestamp of server interaction" },
+        "isAdmin": { "type": "boolean", "description": "Indicates administrative permissions" },
+        "isBanned": { "type": "boolean", "description": "Indicates user moderation status" },
+        "streak": { "type": "integer", "description": "Daily typing test completion streak" },
+        "streakLastUpdated": { "type": "string", "description": "Date of last streak increment" }
+      },
+      "required": ["uid", "email", "username", "createdAt", "bestWPM", "averageWPM", "accuracy", "testsCompleted", "level", "xp"]
+    },
+    "TestResult": {
+      "title": "TestResult",
+      "description": "Metrics captured during a typing test",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "UID of the typist" },
+        "username": { "type": "string", "description": "Username of the typist" },
+        "avatar": { "type": "string", "description": "Avatar of the typist" },
+        "wpm": { "type": "integer", "description": "Words Per Minute speed" },
+        "rawWPM": { "type": "integer", "description": "Raw speed ignoring errors" },
+        "accuracy": { "type": "number", "description": "Precision percentage" },
+        "consistency": { "type": "integer", "description": "Rhythm and typing consistency score" },
+        "duration": { "type": "integer", "description": "Test duration in seconds" },
+        "difficulty": { "type": "string", "description": "Easy, Medium, Hard" },
+        "language": { "type": "string", "description": "Typing content language" },
+        "errors": { "type": "integer", "description": "Typing error count" },
+        "characters": { "type": "integer", "description": "Total typed characters" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Test completion timestamp" }
+      },
+      "required": ["uid", "username", "avatar", "wpm", "rawWPM", "accuracy", "createdAt"]
+    },
+    "Leaderboard": {
+      "title": "LeaderboardEntry",
+      "description": "Shorthand snapshot cached for high-performance ranking display",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "avatar": { "type": "string" },
+        "bestWPM": { "type": "integer" },
+        "accuracy": { "type": "number" },
+        "country": { "type": "string" },
+        "testsCompleted": { "type": "integer" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["uid", "username", "bestWPM"]
+    },
+    "Blog": {
+      "title": "BlogArticle",
+      "description": "Informative blog article with Markdown support",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "readingTime": { "type": "string" },
+        "author": { "type": "string" },
+        "date": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "likesCount": { "type": "integer" },
+        "viewsCount": { "type": "integer" }
+      },
+      "required": ["id", "title", "content", "likesCount", "viewsCount"]
+    },
+    "DailyChallenge": {
+      "title": "DailyChallenge",
+      "description": "Daily scheduled challenge details and targets",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "text": { "type": "string" },
+        "targetWpm": { "type": "integer" },
+        "targetAccuracy": { "type": "number" },
+        "rewardXp": { "type": "integer" }
+      },
+      "required": ["id", "date", "text"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Individual user profiles containing administrative flags and typing credentials."
+    },
+    "/results/{resultId}": {
+      "schema": "TestResult",
+      "description": "Detailed log of every typing test completed across the platform."
+    },
+    "/leaderboard/{userId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Cached ranking records representing top performance across the platform."
+    },
+    "/blogs/{blogId}": {
+      "schema": "Blog",
+      "description": "Community news, tutorials, and expert typing tips."
+    },
+    "/dailyChallenges/{challengeId}": {
+      "schema": "DailyChallenge",
+      "description": "Structured periodic challenges targeting competitive users."
+    }
+  }
+}

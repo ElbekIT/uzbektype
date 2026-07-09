@@ -1,0 +1,6 @@
+{
+  "name": "UzbekType",
+  "description": "Premium modern typing speed test application tailored for Uzbek language with leaderboards, profile, and blog.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
