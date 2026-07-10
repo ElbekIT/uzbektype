@@ -11,46 +11,6 @@ interface LeaderboardCardProps {
   onViewAll: () => void;
 }
 
-// Fallback high-fidelity players to match reference screenshot perfectly
-const FALLBACK_PLAYERS: Record<Difficulty, LeaderboardEntry[]> = {
-  [Difficulty.EASY]: [
-    { id: "f1", uid: "u1", username: "Rezzy Top", avatar: "avatar_1", wpm: 137, accuracy: 98, raw: 140, consistency: 88, difficulty: Difficulty.EASY, time: 30, date: "07/10/2026" },
-    { id: "f2", uid: "u2", username: "Arslonov Alisher", avatar: "avatar_2", wpm: 119, accuracy: 95, raw: 122, consistency: 84, difficulty: Difficulty.EASY, time: 30, date: "07/10/2026" },
-    { id: "f3", uid: "u3", username: "Azizbek Nabiyev", avatar: "avatar_3", wpm: 117, accuracy: 94, raw: 120, consistency: 83, difficulty: Difficulty.EASY, time: 30, date: "07/10/2026" },
-    { id: "f4", uid: "u4", username: "Xasan Asqarov", avatar: "avatar_4", wpm: 104, accuracy: 92, raw: 108, consistency: 80, difficulty: Difficulty.EASY, time: 30, date: "07/09/2026" },
-    { id: "f5", uid: "u5", username: "Javohir Turayev", avatar: "avatar_5", wpm: 101, accuracy: 91, raw: 105, consistency: 78, difficulty: Difficulty.EASY, time: 30, date: "07/09/2026" },
-    { id: "f6", uid: "u6", username: "Azamat Sultonov", avatar: "avatar_6", wpm: 95, accuracy: 90, raw: 98, consistency: 75, difficulty: Difficulty.EASY, time: 30, date: "07/08/2026" },
-    { id: "f7", uid: "u7", username: "Islombek Mustofaqulov", avatar: "avatar_1", wpm: 92, accuracy: 89, raw: 95, consistency: 74, difficulty: Difficulty.EASY, time: 30, date: "07/07/2026" },
-    { id: "f8", uid: "u8", username: "Islombek Mustofaqulov", avatar: "avatar_2", wpm: 91, accuracy: 89, raw: 94, consistency: 73, difficulty: Difficulty.EASY, time: 30, date: "07/07/2026" },
-    { id: "f9", uid: "u9", username: "Fayzulloh Shavkatov", avatar: "avatar_3", wpm: 90, accuracy: 88, raw: 92, consistency: 72, difficulty: Difficulty.EASY, time: 30, date: "07/06/2026" },
-    { id: "f10", uid: "u10", username: "Root Vibe", avatar: "avatar_4", wpm: 86, accuracy: 87, raw: 89, consistency: 70, difficulty: Difficulty.EASY, time: 30, date: "07/05/2026" },
-  ],
-  [Difficulty.MEDIUM]: [
-    { id: "f1", uid: "u1", username: "Rezzy Top", avatar: "avatar_1", wpm: 112, accuracy: 97, raw: 115, consistency: 86, difficulty: Difficulty.MEDIUM, time: 30, date: "07/10/2026" },
-    { id: "f2", uid: "u2", username: "Arslonov Alisher", avatar: "avatar_2", wpm: 98, accuracy: 94, raw: 102, consistency: 82, difficulty: Difficulty.MEDIUM, time: 30, date: "07/10/2026" },
-    { id: "f3", uid: "u3", username: "Azizbek Nabiyev", avatar: "avatar_3", wpm: 95, accuracy: 92, raw: 99, consistency: 80, difficulty: Difficulty.MEDIUM, time: 30, date: "07/10/2026" },
-    { id: "f4", uid: "u4", username: "Xasan Asqarov", avatar: "avatar_4", wpm: 87, accuracy: 91, raw: 91, consistency: 77, difficulty: Difficulty.MEDIUM, time: 30, date: "07/09/2026" },
-    { id: "f5", uid: "u5", username: "Javohir Turayev", avatar: "avatar_5", wpm: 84, accuracy: 90, raw: 88, consistency: 75, difficulty: Difficulty.MEDIUM, time: 30, date: "07/09/2026" },
-    { id: "f6", uid: "u6", username: "Azamat Sultonov", avatar: "avatar_6", wpm: 79, accuracy: 89, raw: 82, consistency: 72, difficulty: Difficulty.MEDIUM, time: 30, date: "07/08/2026" },
-    { id: "f7", uid: "u7", username: "Islombek Mustofaqulov", avatar: "avatar_1", wpm: 75, accuracy: 88, raw: 78, consistency: 70, difficulty: Difficulty.MEDIUM, time: 30, date: "07/07/2026" },
-    { id: "f8", uid: "u8", username: "Islombek Mustofaqulov", avatar: "avatar_2", wpm: 73, accuracy: 87, raw: 76, consistency: 69, difficulty: Difficulty.MEDIUM, time: 30, date: "07/07/2026" },
-    { id: "f9", uid: "u9", username: "Fayzulloh Shavkatov", avatar: "avatar_3", wpm: 71, accuracy: 86, raw: 74, consistency: 68, difficulty: Difficulty.MEDIUM, time: 30, date: "07/06/2026" },
-    { id: "f10", uid: "u10", username: "Root Vibe", avatar: "avatar_4", wpm: 68, accuracy: 85, raw: 71, consistency: 66, difficulty: Difficulty.MEDIUM, time: 30, date: "07/05/2026" },
-  ],
-  [Difficulty.HARD]: [
-    { id: "f1", uid: "u1", username: "Rezzy Top", avatar: "avatar_1", wpm: 92, accuracy: 96, raw: 95, consistency: 84, difficulty: Difficulty.HARD, time: 30, date: "07/10/2026" },
-    { id: "f2", uid: "u2", username: "Arslonov Alisher", avatar: "avatar_2", wpm: 81, accuracy: 93, raw: 85, consistency: 80, difficulty: Difficulty.HARD, time: 30, date: "07/10/2026" },
-    { id: "f3", uid: "u3", username: "Azizbek Nabiyev", avatar: "avatar_3", wpm: 78, accuracy: 91, raw: 82, consistency: 78, difficulty: Difficulty.HARD, time: 30, date: "07/10/2026" },
-    { id: "f4", uid: "u4", username: "Xasan Asqarov", avatar: "avatar_4", wpm: 71, accuracy: 89, raw: 74, consistency: 75, difficulty: Difficulty.HARD, time: 30, date: "07/09/2026" },
-    { id: "f5", uid: "u5", username: "Javohir Turayev", avatar: "avatar_5", wpm: 68, accuracy: 88, raw: 71, consistency: 73, difficulty: Difficulty.HARD, time: 30, date: "07/09/2026" },
-    { id: "f6", uid: "u6", username: "Azamat Sultonov", avatar: "avatar_6", wpm: 63, accuracy: 87, raw: 66, consistency: 70, difficulty: Difficulty.HARD, time: 30, date: "07/08/2026" },
-    { id: "f7", uid: "u7", username: "Islombek Mustofaqulov", avatar: "avatar_1", wpm: 60, accuracy: 86, raw: 63, consistency: 68, difficulty: Difficulty.HARD, time: 30, date: "07/07/2026" },
-    { id: "f8", uid: "u8", username: "Islombek Mustofaqulov", avatar: "avatar_2", wpm: 58, accuracy: 85, raw: 61, consistency: 67, difficulty: Difficulty.HARD, time: 30, date: "07/07/2026" },
-    { id: "f9", uid: "u9", username: "Fayzulloh Shavkatov", avatar: "avatar_3", wpm: 56, accuracy: 84, raw: 59, consistency: 66, difficulty: Difficulty.HARD, time: 30, date: "07/06/2026" },
-    { id: "f10", uid: "u10", username: "Root Vibe", avatar: "avatar_4", wpm: 52, accuracy: 82, raw: 55, consistency: 64, difficulty: Difficulty.HARD, time: 30, date: "07/05/2026" },
-  ]
-};
-
 export const LeaderboardCard: React.FC<LeaderboardCardProps> = ({
   user,
   onLogin,
@@ -92,24 +52,13 @@ export const LeaderboardCard: React.FC<LeaderboardCardProps> = ({
           });
         });
 
-        // Mix live players with fallbacks to guarantee a clean list of 10 players
-        const fallbackList = FALLBACK_PLAYERS[difficulty];
-        const mergedPlayers = [...livePlayers];
-
-        // Fill remaining slots with fallback players
-        fallbackList.forEach((fPlayer) => {
-          if (mergedPlayers.length < 10 && !mergedPlayers.some(p => p.username === fPlayer.username)) {
-            mergedPlayers.push(fPlayer);
-          }
-        });
-
         // Ensure we sort descending by WPM
-        mergedPlayers.sort((a, b) => b.wpm - a.wpm);
-        setPlayers(mergedPlayers.slice(0, 10));
+        livePlayers.sort((a, b) => b.wpm - a.wpm);
+        setPlayers(livePlayers);
       },
       (error) => {
-        console.warn("Firestore leaderboard fetch failed, using fallback:", error);
-        setPlayers(FALLBACK_PLAYERS[difficulty]);
+        console.warn("Firestore leaderboard fetch failed:", error);
+        setPlayers([]);
       }
     );
 
@@ -170,35 +119,42 @@ export const LeaderboardCard: React.FC<LeaderboardCardProps> = ({
 
       {/* Players List */}
       <div className="flex flex-col gap-2 max-h-[380px] overflow-y-auto pr-1">
-        {players.map((player, index) => (
-          <div
-            key={player.id}
-            className={`flex items-center justify-between p-2 rounded-xl transition-all ${
-              user && player.uid === user.uid
-                ? "bg-neutral-900/80 border border-neutral-800"
-                : "hover:bg-neutral-900/40"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              {/* Rank indicator */}
-              <div className="w-5 flex justify-center">{getRankIndicator(index)}</div>
-              
-              {/* Pixel Avatar */}
-              <PixelAvatar avatarId={player.avatar} size={24} className="border-0 bg-transparent rounded-sm" />
-              
-              {/* Username */}
-              <span className="text-xs font-semibold text-neutral-200 truncate max-w-[130px]">
-                {player.username}
-              </span>
-            </div>
-            
-            {/* Speed WPM */}
-            <div className="flex items-baseline gap-1 text-right">
-              <span className="text-xs font-bold text-white font-mono">{player.wpm}</span>
-              <span className="text-[9px] text-neutral-500 uppercase font-mono">WPM</span>
-            </div>
+        {players.length === 0 ? (
+          <div className="text-center py-10 text-neutral-500 text-xs font-mono select-none">
+            Hozircha reytinglar yo'q.<br />
+            Birinchi bo'lib testni yakunlang!
           </div>
-        ))}
+        ) : (
+          players.map((player, index) => (
+            <div
+              key={player.id}
+              className={`flex items-center justify-between p-2 rounded-xl transition-all ${
+                user && player.uid === user.uid
+                  ? "bg-neutral-900/80 border border-neutral-800"
+                  : "hover:bg-neutral-900/40"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                {/* Rank indicator */}
+                <div className="w-5 flex justify-center">{getRankIndicator(index)}</div>
+                
+                {/* Pixel Avatar */}
+                <PixelAvatar avatarId={player.avatar} size={24} className="border-0 bg-transparent rounded-sm" />
+                
+                {/* Username */}
+                <span className="text-xs font-semibold text-neutral-200 truncate max-w-[130px]">
+                  {player.username}
+                </span>
+              </div>
+              
+              {/* Speed WPM */}
+              <div className="flex items-baseline gap-1 text-right">
+                <span className="text-xs font-bold text-white font-mono">{player.wpm}</span>
+                <span className="text-[9px] text-neutral-500 uppercase font-mono">WPM</span>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Join the Rankings CTA (Google login prompt at bottom if not logged in) */}

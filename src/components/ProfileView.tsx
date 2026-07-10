@@ -66,7 +66,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       // Update parent app state
       onProfileUpdated(updatedProfile);
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => {
+        setSaveSuccess(false);
+        onNavigate("home");
+      }, 1500);
     } catch (err) {
       setError("Profilni saqlashda xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.");
       handleFirestoreError(err, OperationType.WRITE, userDocPath);

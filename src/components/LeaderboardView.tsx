@@ -5,29 +5,15 @@ import { collection, query, orderBy, limit, onSnapshot, getDocs } from "firebase
 import { PixelAvatar } from "./PixelAvatar";
 import { Users, Zap, Award, BarChart2 } from "lucide-react";
 
-// Pre-defined top scores in Monkeytype style to populate the leaderboard fully
-const MOCK_LEADERBOARD_DATA: LeaderboardEntry[] = [
-  { id: "m1", uid: "u1", username: "Rezzy Top", avatar: "avatar_1", wpm: 137.2, accuracy: 99.03, raw: 140.5, consistency: 91.7, difficulty: Difficulty.EASY, time: 30, date: "10 Jul 2026" },
-  { id: "m2", uid: "u2", username: "Arslonov Alisher", avatar: "avatar_2", wpm: 119.5, accuracy: 98.51, raw: 122.3, consistency: 90.5, difficulty: Difficulty.EASY, time: 30, date: "10 Jul 2026" },
-  { id: "m3", uid: "u3", username: "Azizbek Nabiyev", avatar: "avatar_3", wpm: 117.1, accuracy: 97.61, raw: 120.4, consistency: 89.2, difficulty: Difficulty.EASY, time: 30, date: "10 Jul 2026" },
-  { id: "m4", uid: "u4", username: "Xasan Asqarov", avatar: "avatar_4", wpm: 104.4, accuracy: 100.0, raw: 108.1, consistency: 91.4, difficulty: Difficulty.EASY, time: 30, date: "09 Jul 2026" },
-  { id: "m5", uid: "u5", username: "Javohir Turayev", avatar: "avatar_5", wpm: 101.2, accuracy: 98.48, raw: 105.7, consistency: 88.5, difficulty: Difficulty.EASY, time: 30, date: "09 Jul 2026" },
-  { id: "m6", uid: "u6", username: "Azamat Sultonov", avatar: "avatar_6", wpm: 95.0, accuracy: 99.73, raw: 98.2, consistency: 93.2, difficulty: Difficulty.EASY, time: 30, date: "08 Jul 2026" },
-  { id: "m7", uid: "u7", username: "Islombek Mustofaqulov", avatar: "avatar_1", wpm: 92.5, accuracy: 97.88, raw: 95.6, consistency: 93.8, difficulty: Difficulty.EASY, time: 30, date: "07 Jul 2026" },
-  { id: "m8", uid: "u8", username: "Islombek Mustofaqulov", avatar: "avatar_2", wpm: 91.0, accuracy: 98.1, raw: 94.0, consistency: 94.0, difficulty: Difficulty.EASY, time: 30, date: "07 Jul 2026" },
-  { id: "m9", uid: "u9", username: "Fayzulloh Shavkatov", avatar: "avatar_3", wpm: 90.2, accuracy: 100.0, raw: 92.5, consistency: 94.6, difficulty: Difficulty.EASY, time: 30, date: "06 Jul 2026" },
-  { id: "m10", uid: "u10", username: "Root Vibe", avatar: "avatar_4", wpm: 86.8, accuracy: 97.2, raw: 89.1, consistency: 92.1, difficulty: Difficulty.EASY, time: 30, date: "05 Jul 2026" }
-];
-
 export const LeaderboardView: React.FC = () => {
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Owner statistics states (mocked with direct aggregates)
-  const [totalUsers, setTotalUsers] = useState(142);
-  const [totalRuns, setTotalRuns] = useState(1894);
-  const [globalAverageSpeed, setGlobalAverageSpeed] = useState(48);
-  const [globalMaxSpeed, setGlobalMaxSpeed] = useState(137);
+  // Owner statistics states (fully real-time from Firestore)
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalRuns, setTotalRuns] = useState(0);
+  const [globalAverageSpeed, setGlobalAverageSpeed] = useState(0);
+  const [globalMaxSpeed, setGlobalMaxSpeed] = useState(0);
 
   useEffect(() => {
     // 1. Fetch live leaderboard entries
@@ -57,22 +43,14 @@ export const LeaderboardView: React.FC = () => {
           });
         });
 
-        // Merge with defaults
-        const merged = [...items];
-        MOCK_LEADERBOARD_DATA.forEach((m) => {
-          if (merged.length < 25 && !merged.some((p) => p.username === m.username)) {
-            merged.push(m);
-          }
-        });
-
         // Final sorting descending
-        merged.sort((a, b) => b.wpm - a.wpm);
-        setBoard(merged);
+        items.sort((a, b) => b.wpm - a.wpm);
+        setBoard(items);
         setLoading(false);
       },
       (error) => {
-        console.warn("Firestore snapshot error, using mock data:", error);
-        setBoard(MOCK_LEADERBOARD_DATA);
+        console.warn("Firestore snapshot error:", error);
+        setBoard([]);
         setLoading(false);
       }
     );
@@ -83,25 +61,26 @@ export const LeaderboardView: React.FC = () => {
         const usersSnap = await getDocs(collection(db, "users"));
         const resultsSnap = await getDocs(collection(db, "results"));
         
-        if (!usersSnap.empty) {
-          setTotalUsers(Math.max(142, usersSnap.size));
-        }
+        setTotalUsers(usersSnap.size);
+        setTotalRuns(resultsSnap.size);
+        
         if (!resultsSnap.empty) {
-          setTotalRuns(Math.max(1894, resultsSnap.size));
-          
           // Calculate average
           let totalSpeed = 0;
-          let maxSpeed = 137;
+          let maxSpeed = 0;
           resultsSnap.forEach((doc) => {
             const wpmVal = doc.data().wpm || 0;
             totalSpeed += wpmVal;
             if (wpmVal > maxSpeed) maxSpeed = wpmVal;
           });
-          setGlobalAverageSpeed(Math.round(totalSpeed / resultsSnap.size) || 48);
+          setGlobalAverageSpeed(Math.round(totalSpeed / resultsSnap.size) || 0);
           setGlobalMaxSpeed(maxSpeed);
+        } else {
+          setGlobalAverageSpeed(0);
+          setGlobalMaxSpeed(0);
         }
       } catch (err) {
-        // Safe fail
+        console.error("Error loading global statistics:", err);
       }
     };
 
@@ -185,59 +164,67 @@ export const LeaderboardView: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {board.map((entry, index) => {
-              const isFirst = index === 0;
-              return (
-                <tr
-                  key={entry.id}
-                  className={`border-b border-neutral-900/50 hover:bg-neutral-900/40 text-neutral-300 transition-colors ${
-                    isFirst ? "bg-neutral-900/10" : ""
-                  }`}
-                >
-                  {/* Position Row */}
-                  <td className="py-4 px-4 font-bold text-center">
-                    {isFirst ? (
-                      <span className="text-yellow-500 text-sm">👑</span>
-                    ) : (
-                      <span className="text-neutral-500">{index + 1}</span>
-                    )}
-                  </td>
+            {board.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-16 text-center text-neutral-500 font-mono text-xs select-none">
+                  Hozircha reytinglar yo'q. Birinchi bo'lib testni yakunlang va o'z natijangizni kiriting!
+                </td>
+              </tr>
+            ) : (
+              board.map((entry, index) => {
+                const isFirst = index === 0;
+                return (
+                  <tr
+                    key={entry.id}
+                    className={`border-b border-neutral-900/50 hover:bg-neutral-900/40 text-neutral-300 transition-colors ${
+                      isFirst ? "bg-neutral-900/10" : ""
+                    }`}
+                  >
+                    {/* Position Row */}
+                    <td className="py-4 px-4 font-bold text-center">
+                      {isFirst ? (
+                        <span className="text-yellow-500 text-sm">👑</span>
+                      ) : (
+                        <span className="text-neutral-500">{index + 1}</span>
+                      )}
+                    </td>
 
-                  {/* Username and Pixel Avatar */}
-                  <td className="py-4 px-4 font-semibold text-white">
-                    <div className="flex items-center gap-3">
-                      <PixelAvatar avatarId={entry.avatar} size={24} className="border-0 bg-transparent rounded-md" />
-                      <span>{entry.username}</span>
-                    </div>
-                  </td>
+                    {/* Username and Pixel Avatar */}
+                    <td className="py-4 px-4 font-semibold text-white">
+                      <div className="flex items-center gap-3">
+                        <PixelAvatar avatarId={entry.avatar} size={24} className="border-0 bg-transparent rounded-md" />
+                        <span>{entry.username}</span>
+                      </div>
+                    </td>
 
-                  {/* Speed */}
-                  <td className="py-4 px-4 text-right font-bold text-white text-sm">
-                    {entry.wpm.toFixed(1)}
-                  </td>
+                    {/* Speed */}
+                    <td className="py-4 px-4 text-right font-bold text-white text-sm">
+                      {entry.wpm.toFixed(1)}
+                    </td>
 
-                  {/* Accuracy */}
-                  <td className="py-4 px-4 text-right text-neutral-400">
-                    {entry.accuracy.toFixed(1)}%
-                  </td>
+                    {/* Accuracy */}
+                    <td className="py-4 px-4 text-right text-neutral-400">
+                      {entry.accuracy.toFixed(1)}%
+                    </td>
 
-                  {/* Raw WPM */}
-                  <td className="py-4 px-4 text-right text-neutral-500">
-                    {entry.raw.toFixed(1)}
-                  </td>
+                    {/* Raw WPM */}
+                    <td className="py-4 px-4 text-right text-neutral-500">
+                      {entry.raw.toFixed(1)}
+                    </td>
 
-                  {/* Consistency */}
-                  <td className="py-4 px-4 text-right text-neutral-500">
-                    {entry.consistency.toFixed(1)}%
-                  </td>
+                    {/* Consistency */}
+                    <td className="py-4 px-4 text-right text-neutral-500">
+                      {entry.consistency.toFixed(1)}%
+                    </td>
 
-                  {/* Date */}
-                  <td className="py-4 px-4 text-right text-neutral-500 pr-6">
-                    {entry.date}
-                  </td>
-                </tr>
-              );
-            })}
+                    {/* Date */}
+                    <td className="py-4 px-4 text-right text-neutral-500 pr-6">
+                      {entry.date}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

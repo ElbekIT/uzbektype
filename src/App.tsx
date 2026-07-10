@@ -9,7 +9,7 @@ import { MyResultsView } from "./components/MyResultsView";
 import { LeaderboardView } from "./components/LeaderboardView";
 import { BlogView } from "./components/BlogView";
 import { auth, db, googleProvider } from "./firebase";
-import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore";
 import { Difficulty, UserProfile, TypingResult } from "./types";
 
@@ -25,8 +25,40 @@ export default function App() {
 
   // 1. Monitor Firebase Auth Session Changes
   useEffect(() => {
+    // Process redirect result if any on load
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          console.log("Redirect login successful:", result.user.email);
+        }
+      })
+      .catch((err) => {
+        console.warn("Google redirect authentication result handling error:", err);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
+        // Fast optimistic profile state to avoid blocking UI with a slow loading spinner
+        const fullName = u.displayName || "Yozuvchi Anonim";
+        const parts = fullName.split(" ");
+        const fName = parts[0] || "Yozuvchi";
+        const lName = parts.slice(1).join(" ") || "Anonim";
+        
+        setUser((prev) => {
+          if (prev && prev.uid === u.uid) {
+            return prev;
+          }
+          return {
+            uid: u.uid,
+            email: u.email || "",
+            firstName: fName,
+            lastName: lName,
+            avatar: "avatar_1",
+            createdAt: new Date()
+          };
+        });
+        setLoadingAuth(false); // Instantly unblock the UI!
+
         try {
           const userRef = doc(db, "users", u.uid);
           const snap = await getDoc(userRef);
@@ -39,61 +71,39 @@ export default function App() {
               firstName: data.firstName || "",
               lastName: data.lastName || "",
               avatar: data.avatar || "avatar_1",
-              createdAt: data.createdAt
+              createdAt: data.createdAt ? new Date(data.createdAt.seconds * 1000) : new Date()
             });
           } else {
-            // Provision brand new profile
-            const fullName = u.displayName || "Yozuvchi Anonim";
-            const parts = fullName.split(" ");
-            const fName = parts[0] || "Yozuvchi";
-            const lName = parts.slice(1).join(" ") || "Anonim";
-            const randomAvatar = `avatar_${Math.floor(Math.random() * 6) + 1}`;
-
-            const freshProfile: UserProfile = {
-              uid: u.uid,
-              email: u.email || "",
-              firstName: fName,
-              lastName: lName,
-              avatar: randomAvatar,
-              createdAt: new Date()
-            };
-
-            await setDoc(userRef, {
-              uid: freshProfile.uid,
-              email: freshProfile.email,
-              firstName: freshProfile.firstName,
-              lastName: freshProfile.lastName,
-              avatar: freshProfile.avatar,
-              createdAt: freshProfile.createdAt
-            });
-
-            setUser(freshProfile);
+            // New user! Set the memory state and route to Profile Setup view immediately
+            // so they can choose their avatar, enter first name, last name and save.
+            setCurrentView("profile");
           }
         } catch (err) {
           console.error("Error setting up user profile from Firestore:", err);
         }
       } else {
         setUser(null);
+        setLoadingAuth(false);
       }
-      setLoadingAuth(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  // 2. Google Authentication Login popup
+  // 2. Google Authentication Login popup with automatic redirect fallback
   const handleLogin = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      const u = result.user;
-      if (u) {
+      if (result.user) {
         // Handled reactively by onAuthStateChanged
       }
-    } catch (error) {
-      console.error("Google authentication popup error:", error);
-      alert(
-        "Iframe cheklovlari sababli tizimga kirish oynasi bloklangan bo'lishi mumkin. To'liq ishlashi uchun saytni yangi tabda oching."
-      );
+    } catch (error: any) {
+      console.warn("Google popup blocked or failed, falling back to redirect authentication:", error);
+      try {
+        await signInWithRedirect(auth, googleProvider);
+      } catch (redirectError) {
+        console.error("Google redirect authentication failed:", redirectError);
+      }
     }
   };
 
