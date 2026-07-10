@@ -1,293 +1,320 @@
-import React from 'react';
-import { UserProfile, UserSettings, TestResult } from '../types';
-import { addTestResult } from '../utils/storage';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { RefreshCw, Download, Share2, Award, ArrowUpRight, Copy, Check, Send, Sparkles } from 'lucide-react';
-import { motion } from 'motion/react';
+import React from "react";
+import { UserProfile, TypingResult, Difficulty } from "../types";
+import { LeaderboardCard } from "./LeaderboardCard";
+import { Send, Share2, RefreshCw, Trophy, Sparkles } from "lucide-react";
 
 interface ResultViewProps {
-  currentUser: UserProfile;
-  settings: UserSettings;
-  lastResult: TestResult & { wpmHistory: number[] };
-  setCurrentView: (view: string) => void;
+  stats: Omit<TypingResult, "uid" | "createdAt">;
+  timeline: number[];
+  user: UserProfile | null;
+  onLogin: () => void;
   onRestart: () => void;
+  onNavigate: (view: "home" | "test" | "profile" | "my-results" | "leaderboard" | "blog") => void;
 }
 
-export default function ResultView({
-  currentUser,
-  settings,
-  lastResult,
-  setCurrentView,
+export const ResultView: React.FC<ResultViewProps> = ({
+  stats,
+  timeline,
+  user,
+  onLogin,
   onRestart,
-}: ResultViewProps) {
-  const [copied, setCopied] = React.useState(false);
+  onNavigate
+}) => {
+  const { wpm, accuracy, raw, consistency, difficulty, time } = stats;
 
-  // Save the result immediately on load
-  React.useEffect(() => {
-    addTestResult(lastResult);
-  }, [lastResult]);
+  // Custom SVG line chart plotter
+  const renderSVGChart = () => {
+    const dataPoints = timeline.length > 0 ? timeline : [wpm];
+    const maxSpeed = Math.max(...dataPoints, raw, 60) + 10;
+    const chartHeight = 160;
+    const chartWidth = 320;
+    const padding = 15;
 
-  // Construct chart data second-by-second
-  const chartData = lastResult.wpmHistory.map((wpm, idx) => ({
-    sec: idx + 1,
-    wpm: wpm,
-    raw: Math.round(wpm * 1.05 + (Math.random() * 2)), // Recreate raw curve gracefully
-  }));
+    const points = dataPoints.map((val, index) => {
+      const x = padding + (index / Math.max(1, dataPoints.length - 1)) * (chartWidth - padding * 2);
+      const y = chartHeight - padding - (val / maxSpeed) * (chartHeight - padding * 2);
+      return { x, y };
+    });
 
-  const handleCopyResult = () => {
-    const text = settings.language === 'uz'
-      ? `💻 UzbekType Tezlik Testi!\n📈 Tezlik: ${lastResult.wpm} WPM\n🎯 Aniqlik: ${lastResult.accuracy}%\n⏱️ Vaqt: ${lastResult.duration}sek\n🌐 UzbekType platformasida o'z tezligingizni sinab ko'ring!`
-      : `💻 UzbekType Speed Test!\n📈 Speed: ${lastResult.wpm} WPM\n🎯 Accuracy: ${lastResult.accuracy}%\n⏱️ Time: ${lastResult.duration}s\nTest your typing speed on UzbekType!`;
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+    // Generate Raw WPM dashed line (estimating raw history or plotting simple curve)
+    const rawPoints = dataPoints.map((val, index) => {
+      const rawVal = val + (raw - wpm) * (0.8 + 0.2 * Math.sin(index)); // mock raw timeline
+      const x = padding + (index / Math.max(1, dataPoints.length - 1)) * (chartWidth - padding * 2);
+      const y = chartHeight - padding - (rawVal / maxSpeed) * (chartHeight - padding * 2);
+      return { x, y };
+    });
+    const rawLinePath = rawPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+    return (
+      <div className="w-full h-44 bg-[#0a0a0a] border border-neutral-850 rounded-2xl p-4 flex flex-col justify-between">
+        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full overflow-visible">
+          {/* Grid lines */}
+          {[0, 15, 30, 45, 60, 80].map((val) => {
+            if (val > maxSpeed) return null;
+            const y = chartHeight - padding - (val / maxSpeed) * (chartHeight - padding * 2);
+            return (
+              <g key={val} className="opacity-20">
+                <line
+                  x1={padding}
+                  y1={y}
+                  x2={chartWidth - padding}
+                  y2={y}
+                  stroke="#ffffff"
+                  strokeWidth="0.5"
+                  strokeDasharray="3,3"
+                />
+                <text
+                  x={padding - 10}
+                  y={y + 3}
+                  fill="#888888"
+                  fontSize="7"
+                  textAnchor="end"
+                  fontFamily="monospace"
+                >
+                  {val}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Time markers on X axis */}
+          {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+            const x = padding + pct * (chartWidth - padding * 2);
+            const val = Math.round(pct * time);
+            return (
+              <text
+                key={i}
+                x={x}
+                y={chartHeight - 2}
+                fill="#555555"
+                fontSize="6"
+                textAnchor="middle"
+                fontFamily="monospace"
+              >
+                {val}s
+              </text>
+            );
+          })}
+
+          {/* Raw WPM line (dashed) */}
+          <path d={rawLinePath} fill="none" stroke="#444444" strokeWidth="1.5" strokeDasharray="3,3" />
+
+          {/* WPM line */}
+          <path d={linePath} fill="none" stroke="#ffffff" strokeWidth="2.0" />
+
+          {/* Markers */}
+          {points.map((p, i) => {
+            if (i % Math.max(1, Math.round(points.length / 6)) !== 0 && i !== points.length - 1) return null;
+            return (
+              <circle
+                key={i}
+                cx={p.x}
+                cy={p.y}
+                r="2.5"
+                fill="#ffffff"
+                stroke="#121212"
+                strokeWidth="1"
+              />
+            );
+          })}
+        </svg>
+
+        {/* Legend Indicators */}
+        <div className="flex justify-center items-center gap-4 text-[9px] font-mono text-neutral-500 select-none">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-white" />
+            <span>WPM</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="border-t-2 border-dashed border-neutral-500 w-3 h-0" />
+            <span>Raw WPM</span>
+          </div>
+        </div>
+      </div>
+    );
   };
 
-  const handleExportJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(lastResult, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `uzbektype_result_${lastResult.id}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  const handleShare = () => {
+    const textToCopy = `Uzbektype yozish testi natijam:\n🚀 Tezlik: ${wpm} WPM\n🎯 Aniqlik: ${accuracy}%\n🔥 Barqarorlik: ${consistency}%\nQiyinlik darajasi: ${difficulty.toUpperCase()}\n\nO'zingizni sinab ko'ring: ${window.location.href}`;
+    navigator.clipboard.writeText(textToCopy);
+    alert("Natijalar clipboardga ko'chirildi! Uni do'stlaringizga ulashing.");
   };
-
-  // Localized Labels
-  const isUz = settings.language === 'uz';
-  const t = {
-    title: isUz ? "Natija" : "Result",
-    wpm: isUz ? "WPM" : "WPM",
-    accuracy: isUz ? "Aniqlik" : "Accuracy",
-    raw: isUz ? "Asl tezlik" : "Raw WPM",
-    consistency: isUz ? "Barqarorlik" : "Consistency",
-    chars: isUz ? "Belgilar" : "Characters",
-    timeSpent: isUz ? "Sarflandi" : "Time spent",
-    errors: isUz ? "Xatolar" : "Errors",
-    restartBtn: isUz ? "Yana sinash (Tab)" : "Restart test (Tab)",
-    exportBtn: isUz ? "Eksport qilish (JSON)" : "Export (JSON)",
-    copyBtn: isUz ? "Nusxalash" : "Copy results",
-    copied: isUz ? "Nusxalandi!" : "Copied!",
-    dashboardLink: isUz ? "Profil va Dashboardga o‘tish" : "Go to dashboard",
-    rankingTitle: isUz ? "Sizning o'rningiz" : "Your Standing",
-    tgBannerTitle: isUz ? "Telegram jamoamizga qo'shiling!" : "Join our Telegram community!",
-    tgBannerDesc: isUz 
-      ? "Tez yozish chempionlari guruhiga qo'shiling, yangiliklardan boxabar bo'ling va eng yaxshi natijalaringizni ulashing!" 
-      : "Join our channels, share your speeds, discuss custom mechanical keyboards, and meet typing champions!",
-    tgBtn: isUz ? "Kanalga a'zo bo'lish" : "Join Channel",
-    newRecord: isUz ? "Yangi Shaxsiy Rekord!" : "New Personal Best!",
-  };
-
-  const isBest = lastResult.wpm >= (currentUser.bestWPM || 0);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 text-white">
+    <div className="w-full max-w-7xl mx-auto py-6 px-4 flex flex-col gap-6">
       
-      {/* Top Banner for New Highscores */}
-      {isBest && currentUser.uid !== 'guest_user' && (
-        <div className="mb-6 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 flex items-center gap-3 justify-center text-sm font-semibold tracking-wide uppercase animate-bounce">
-          <Sparkles className="w-5 h-5 fill-yellow-500" />
-          <span>{t.newRecord}</span>
+      {/* Top Banner for Saving score (Only shown for guest users) */}
+      {!user && (
+        <div className="w-full bg-[#0e0e0e]/80 border border-neutral-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-neutral-900 border border-neutral-800 rounded-xl flex items-center justify-center text-white">
+              <Trophy className="w-5 h-5 text-yellow-500" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Natijangizni saqlang</h3>
+              <p className="text-xs text-neutral-400">
+                Google bilan kiring — testlaringiz tarixi saqlanadi va siz reytingda qatnashasiz
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onLogin}
+            className="flex items-center gap-2 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer"
+          >
+            {/* Google Logo SVG */}
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+              <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+              />
+            </svg>
+            <span>Google bilan kirish</span>
+          </button>
         </div>
       )}
 
-      {/* Main Results Board Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
-        
-        {/* Large Stats Display */}
-        <div className="lg:col-span-1 flex flex-col justify-between gap-6 p-6 rounded-2xl bg-[#151515] border border-white/10 shadow-xl relative overflow-hidden">
-          {/* Card subtle background decor */}
-          <div className="absolute top-0 left-0 w-20 h-20 bg-yellow-500/5 blur-xl rounded-full"></div>
-
-          {/* WPM Display */}
-          <div className="space-y-1">
-            <span className="text-xs font-mono text-gray-500 uppercase tracking-widest">{t.wpm}</span>
-            <div className="text-6xl md:text-7xl font-sans font-extrabold text-yellow-500 tracking-tight flex items-baseline">
-              {lastResult.wpm}
-            </div>
-          </div>
-
-          {/* Accuracy Display */}
-          <div className="space-y-1">
-            <span className="text-xs font-mono text-gray-500 uppercase tracking-widest">{t.accuracy}</span>
-            <div className="text-5xl md:text-6xl font-sans font-extrabold text-white tracking-tight">
-              {lastResult.accuracy}%
-            </div>
-          </div>
-
-          {/* Side Sub-stats list */}
-          <div className="space-y-3.5 pt-4 border-t border-white/10 font-mono text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">{t.raw}:</span>
-              <span className="text-gray-200 font-bold">{lastResult.rawWpm}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">{t.consistency}:</span>
-              <span className="text-gray-200 font-bold">{lastResult.consistency}%</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">{t.timeSpent}:</span>
-              <span className="text-gray-200 font-bold">{lastResult.duration}s</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">{t.errors}:</span>
-              <span className="text-red-500 font-bold">{lastResult.errors}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Recharts Timeline Graph Display */}
-        <div className="lg:col-span-3 p-6 rounded-2xl bg-[#151515] border border-white/10 shadow-xl flex flex-col justify-between min-h-[320px]">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-sans font-bold text-lg text-white">Yozish Dinamikasi (WPM / Sekund)</h3>
-            <div className="flex gap-4 text-xs font-mono">
-              <span className="flex items-center gap-1.5 text-yellow-500">
-                <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
-                Net WPM
+      {/* Main Grid: Left statistics, Right Leaderboard */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* Left Column: Stats & Chart */}
+        <div className="flex-1 flex flex-col gap-6 w-full">
+          <div className="bg-[#050505]/40 border border-neutral-900 rounded-3xl p-6 flex flex-col sm:flex-row gap-6 items-center">
+            {/* Left huge numbers */}
+            <div className="flex flex-col items-center sm:items-start text-center sm:text-left select-none sm:min-w-[180px]">
+              <span className="font-display text-6xl md:text-7xl font-extrabold text-white leading-none">
+                {wpm}
               </span>
-              <span className="flex items-center gap-1.5 text-gray-500">
-                <span className="w-2.5 h-2.5 rounded-full bg-gray-500"></span>
+              <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest font-mono mt-2 block">
+                WPM · {time}S · {difficulty === "oson" ? "Oson" : difficulty === "o'rta" ? "O'rta" : "Qiyin"}
+              </span>
+
+              <div className="h-px bg-neutral-900 w-full my-4" />
+
+              <span className="font-display text-4xl md:text-5xl font-extrabold text-white leading-none">
+                {accuracy}%
+              </span>
+              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest font-mono mt-1.5 block">
+                Aniqlik
+              </span>
+            </div>
+
+            {/* Right chart */}
+            <div className="flex-1 w-full">
+              {renderSVGChart()}
+            </div>
+          </div>
+
+          {/* Sub Stats Cards Grid (4 panels) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+            {/* Stat Card 1 */}
+            <div className="bg-[#0e0e0e]/50 border border-neutral-850 rounded-2xl p-4 text-center">
+              <span className="block text-2xl font-bold font-mono text-white mb-1">
+                {raw}
+              </span>
+              <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
                 Raw WPM
               </span>
             </div>
-          </div>
 
-          <div className="flex-1 min-h-[220px] w-full">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                  <XAxis dataKey="sec" stroke="#555" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#555" fontSize={11} tickLine={false} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#181818', borderColor: '#333', borderRadius: '8px', fontFamily: 'monospace' }}
-                    labelStyle={{ color: '#aaa' }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="wpm" 
-                    stroke="#eab308" 
-                    strokeWidth={3} 
-                    dot={false}
-                    activeDot={{ r: 6 }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="raw" 
-                    stroke="#555" 
-                    strokeWidth={2} 
-                    strokeDasharray="4 4"
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-gray-500 font-mono text-sm">
-                Grafik ma'lumotlari yetarli emas.
-              </div>
-            )}
-          </div>
-        </div>
-
-      </div>
-
-      {/* Sharing, Actions, and Ranking section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch mb-8">
-        
-        {/* Action Controls Card */}
-        <div className="p-6 rounded-2xl bg-[#131313] border border-white/5 flex flex-col justify-between gap-4">
-          <h4 className="font-sans font-bold text-base text-gray-200">Amallar</h4>
-          
-          <button
-            onClick={onRestart}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-sm transition-all active:scale-95 cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>{t.restartBtn}</span>
-          </button>
-
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={handleCopyResult}
-              className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 text-xs font-semibold transition-all cursor-pointer"
-            >
-              {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-yellow-500" />}
-              <span>{copied ? t.copied : t.copyBtn}</span>
-            </button>
-            <button
-              onClick={handleExportJSON}
-              className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 text-xs font-semibold transition-all cursor-pointer"
-            >
-              <Download className="w-4 h-4 text-blue-500" />
-              <span>{t.exportBtn}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Global Ranking Status */}
-        <div className="p-6 rounded-2xl bg-[#131313] border border-white/5 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-sans font-bold text-base text-gray-200">{t.rankingTitle}</h4>
-            <Award className="w-5 h-5 text-yellow-500" />
-          </div>
-          
-          <div className="py-4 text-center">
-            <div className="text-3xl font-extrabold text-white tracking-tight">
-              #{lastResult.wpm > 100 ? 3 : lastResult.wpm > 80 ? 7 : 12}
+            {/* Stat Card 2 */}
+            <div className="bg-[#0e0e0e]/50 border border-neutral-850 rounded-2xl p-4 text-center">
+              <span className="block text-2xl font-bold font-mono text-white mb-1">
+                {Math.round(wpm * (time / 60) * 5)}/0/0
+              </span>
+              <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
+                Belgilar
+              </span>
             </div>
-            <p className="text-xs text-gray-500 mt-1 font-mono">Dunyo Reytingi Bo'yicha</p>
+
+            {/* Stat Card 3 */}
+            <div className="bg-[#0e0e0e]/50 border border-neutral-850 rounded-2xl p-4 text-center">
+              <span className="block text-2xl font-bold font-mono text-white mb-1">
+                {consistency}%
+              </span>
+              <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
+                Barqarorlik
+              </span>
+            </div>
+
+            {/* Stat Card 4 */}
+            <div className="bg-[#0e0e0e]/50 border border-neutral-850 rounded-2xl p-4 text-center">
+              <span className="block text-2xl font-bold font-mono text-white mb-1">
+                {time}s
+              </span>
+              <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
+                Vaqt
+              </span>
+            </div>
           </div>
 
-          <button
-            onClick={() => setCurrentView('leaderboard')}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-gray-300 hover:text-white transition-all cursor-pointer"
-          >
-            <span>Reyting peshqadamlarini ochish</span>
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Go To Dashboard Shortcut Card */}
-        <div className="p-6 rounded-2xl bg-[#131313] border border-white/5 flex flex-col justify-between">
-          <div className="space-y-2">
-            <h4 className="font-sans font-bold text-base text-gray-200">Batafsil Tahlil</h4>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Jami topshirgan barcha testlaringiz, mukammallik yutuqlari va chuqurroq progress grafiklarini shaxsiy Dashboardingiz orqali ko'rib boring.
-            </p>
+          {/* Telegram Promo Banner - Screenshot identical */}
+          <div className="w-full bg-gradient-to-r from-[#17212b] to-[#111] border border-[#219ebc]/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 bg-[#229ED9] rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-md">
+                {/* Standard Telegram logo drawing */}
+                <Send className="w-5 h-5 fill-white text-white transform -translate-x-0.5 translate-y-0.5 rotate-[-15deg]" />
+              </div>
+              <div className="text-left">
+                <h4 className="text-xs font-bold text-white">
+                  @shavkatovio kanaliga qo'shiling
+                </h4>
+                <p className="text-[10px] text-neutral-400 mt-0.5">
+                  AI yangiliklari va raqamli ko'nikmalar bo'yicha foydali kontent
+                </p>
+              </div>
+            </div>
+            
+            <a
+              href="https://t.me/shavkatovio"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 bg-[#219ebc] hover:bg-[#1a8099] text-white font-extrabold text-xs px-4 py-2 rounded-xl shadow-lg shadow-sky-950/40 cursor-pointer"
+            >
+              <span>Qo'shilish</span>
+              <span className="text-sm">→</span>
+            </a>
           </div>
-          <button
-            onClick={() => setCurrentView(currentUser.uid === 'guest_user' ? 'profile' : 'dashboard')}
-            className="w-full mt-4 flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs font-bold text-white transition-all cursor-pointer"
-          >
-            <span>{t.dashboardLink}</span>
-          </button>
+
+          {/* Action buttons centered */}
+          <div className="flex items-center justify-center gap-4 py-3 select-none">
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-2 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900 bg-neutral-950 text-neutral-300 hover:text-white font-bold text-xs py-3 px-6 rounded-xl transition-all cursor-pointer"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Ulashish</span>
+            </button>
+
+            <button
+              onClick={onRestart}
+              className="flex items-center gap-2 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs py-3 px-6 rounded-xl transition-all cursor-pointer shadow-md"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Qaytadan</span>
+            </button>
+          </div>
         </div>
 
+        {/* Right Column: Leaderboard Card Widget */}
+        <LeaderboardCard 
+          user={user} 
+          onLogin={onLogin} 
+          onViewAll={() => onNavigate("leaderboard")} 
+        />
       </div>
-
-      {/* Styled Telegram Promotional Banner */}
-      <div className="rounded-2xl p-6 bg-gradient-to-r from-blue-600/10 to-cyan-500/10 border border-blue-500/20 shadow-lg relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-        {/* Background glow vector */}
-        <div className="absolute top-1/2 -right-20 -translate-y-1/2 w-48 h-48 bg-blue-500/10 blur-3xl rounded-full"></div>
-        
-        <div className="flex items-center gap-4 text-center md:text-left flex-col md:flex-row">
-          <div className="p-3.5 rounded-2xl bg-[#181818] text-blue-400 border border-blue-500/30">
-            <Send className="w-7 h-7 fill-blue-400/20" />
-          </div>
-          <div className="space-y-1">
-            <h3 className="font-sans font-extrabold text-lg text-white">{t.tgBannerTitle}</h3>
-            <p className="text-xs text-gray-400 max-w-xl leading-relaxed">{t.tgBannerDesc}</p>
-          </div>
-        </div>
-
-        <button
-          onClick={() => alert("Siz hozir UzbekType Telegram kanaliga yo'naltirilyapsiz! (@UzbekType_Channel)")}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-white font-bold text-sm transition-all active:scale-95 shadow-[0_4px_12px_rgba(59,130,246,0.3)] cursor-pointer"
-        >
-          <span>{t.tgBtn}</span>
-        </button>
-      </div>
-
     </div>
   );
-}
+};

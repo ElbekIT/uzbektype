@@ -1,59 +1,81 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Global Safety Net (Pillar 1)
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
-    // Helper functions
-    function isAuthenticated() {
+    // Common Helpers (Pillar 3)
+    function isSignedIn() {
       return request.auth != null;
     }
 
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return isAuthenticated() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
+      return id is string && id.size() <= 128;
     }
 
-    // Users Collection
+    // Users Collection Rules (Pillar 2 & 6)
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isOwner(userId);
-      allow update: if (isAuthenticated() && isOwner(userId)) || isAdmin();
-      allow delete: if isAdmin();
+      // Leaderboard requires reading other profiles, but we restrict write to owners only
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) 
+        && request.resource.data.uid == userId
+        && request.resource.data.firstName is string 
+        && request.resource.data.firstName.size() <= 50
+        && request.resource.data.lastName is string 
+        && request.resource.data.lastName.size() <= 50
+        && request.resource.data.avatar is string
+        && request.resource.data.email is string;
+      allow update: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.firstName is string 
+        && request.resource.data.firstName.size() <= 50
+        && request.resource.data.lastName is string 
+        && request.resource.data.lastName.size() <= 50
+        && request.resource.data.avatar is string
+        && request.resource.data.email == resource.data.email; // email is immutable
+      allow delete: if isOwner(userId);
     }
 
-    // Results Collection
+    // Results Collection Rules (Pillar 5, 8 & 12)
     match /results/{resultId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      // Users can query/list their own results
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      
+      // Allow creation of results tied to user's authenticated UID
+      allow create: if isSignedIn() 
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.wpm is number
+        && request.resource.data.accuracy is number
+        && request.resource.data.raw is number
+        && request.resource.data.consistency is number
+        && request.resource.data.difficulty in ['oson', 'o\'rta', 'qiyin']
+        && request.resource.data.time in [10, 30, 60];
+        
+      // Completed scores are immutable. Preventing "Update-Gaps" or score falsification.
+      allow update, delete: if false;
     }
 
-    // Leaderboard Collection
-    match /leaderboard/{userId} {
-      allow read: if isAuthenticated();
-      allow create, update: if (isAuthenticated() && isOwner(userId)) || isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    // Blogs Collection
-    match /blogs/{blogId} {
+    // Leaderboard Cache Collection Rules
+    match /leaderboard/{entryId} {
+      // Anybody can view rankings (even non-signed in users for Home Page widget)
       allow read: if true;
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Daily Challenges
-    match /dailyChallenges/{challengeId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+      
+      // Signed-in users can update their own entry on the leaderboard
+      allow create, update: if isSignedIn() 
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.wpm is number
+        && request.resource.data.accuracy is number
+        && request.resource.data.raw is number
+        && request.resource.data.consistency is number;
+      
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
   }
 }

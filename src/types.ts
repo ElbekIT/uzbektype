@@ -1,72 +1,63 @@
-export interface UserProfile {
-  uid: string;
-  username: string;
-  email: string;
-  avatar: string; // pixel avatar code or identifier
-  country: string;
-  createdAt: string;
-  bestWPM: number;
-  averageWPM: number;
-  accuracy: number;
-  testsCount: number;
-  streak: number;
-  streakLastUpdated?: string;
-  isAdmin?: boolean;
-  isBanned?: boolean;
+export enum Difficulty {
+  EASY = "oson",
+  MEDIUM = "o'rta",
+  HARD = "qiyin"
 }
 
-export interface TestResult {
+export enum Timeframe {
+  WEEKLY = "hafta",
+  MONTHLY = "oy"
+}
+
+export enum AnimationMode {
+  NORMAL = "normal",
+  VERTICAL = "vertical",
+  SMOOTH = "smooth"
+}
+
+export interface UserProfile {
+  uid: string;
+  firstName: string;
+  lastName: string;
+  avatar: string; // ID or key of pixel avatar
+  email: string;
+  createdAt: any; // Firestore Timestamp
+}
+
+export interface TypingResult {
+  id?: string;
+  uid: string;
+  wpm: number;
+  accuracy: number;
+  raw: number;
+  consistency: number;
+  difficulty: Difficulty;
+  time: number; // in seconds (10, 30, 60)
+  createdAt: any; // Firestore Timestamp
+  username?: string; // Cache for leaderboard lookup
+  avatar?: string; // Cache for leaderboard lookup
+}
+
+export interface LeaderboardEntry {
   id: string;
-  userId: string;
+  uid: string;
   username: string;
   avatar: string;
   wpm: number;
-  rawWpm: number;
   accuracy: number;
+  raw: number;
   consistency: number;
-  errors: number;
-  characters: number;
-  difficulty: 'easy' | 'medium' | 'hard';
-  duration: number; // in seconds (e.g., 15, 30, 60)
-  language: 'uz' | 'en';
-  createdAt: string;
-}
-
-export interface BlogArticle {
-  id: string;
-  title: string;
-  excerpt: string;
-  content: string; // Markdown supported
-  category: string;
-  readingTime: string;
-  author: string;
+  difficulty: Difficulty;
+  time: number;
   date: string;
-  coverUrl: string;
-  likesCount: number;
-  viewsCount: number;
 }
 
-export interface AdminLog {
-  id: string;
-  timestamp: string;
-  action: string;
-  details: string;
-  adminEmail: string;
-}
-
-export interface UserSettings {
-  theme: 'carbon' | 'cyberpunk' | 'serene' | 'lavender';
-  language: 'uz' | 'en';
-  typingSound: 'none' | 'click' | 'beep' | 'mechanical';
-  showKeyboard: boolean;
-}
-
-export interface Achievement {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  unlockedAt?: string;
-  requirementType: 'wpm' | 'tests' | 'streak' | 'accuracy';
-  requirementValue: number;
+export interface AppState {
+  view: "home" | "test" | "profile" | "my-results" | "leaderboard" | "blog";
+  user: UserProfile | null;
+  loading: boolean;
+  selectedTime: number; // 10, 30, 60
+  selectedDifficulty: Difficulty;
+  theme: "dark" | "light";
+  lang: "uz" | "en";
 }

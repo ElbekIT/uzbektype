@@ -1,260 +1,186 @@
-import React from 'react';
-import { UserProfile, UserSettings } from '../types';
-import { Globe, Palette, Heart, LogIn, LogOut, ShieldAlert, Award, User, LayoutDashboard, Keyboard } from 'lucide-react';
-import { motion } from 'motion/react';
+import React, { useState } from "react";
+import { Sun, Moon, LogIn, LogOut, User, BarChart2, Heart, Play } from "lucide-react";
+import { UserProfile } from "../types";
+import { PixelAvatar } from "./PixelAvatar";
 
 interface NavbarProps {
-  currentUser: UserProfile;
-  settings: UserSettings;
-  setSettings: (settings: UserSettings) => void;
   currentView: string;
-  setCurrentView: (view: string) => void;
+  onNavigate: (view: "home" | "test" | "profile" | "my-results" | "leaderboard" | "blog") => void;
+  user: UserProfile | null;
   onLogin: () => void;
   onLogout: () => void;
+  theme: "dark" | "light";
+  onToggleTheme: () => void;
 }
 
-export default function Navbar({
-  currentUser,
-  settings,
-  setSettings,
+export const Navbar: React.FC<NavbarProps> = ({
   currentView,
-  setCurrentView,
+  onNavigate,
+  user,
   onLogin,
   onLogout,
-}: NavbarProps) {
-  
-  const cycleTheme = () => {
-    const themes: UserSettings['theme'][] = ['carbon', 'cyberpunk', 'serene', 'lavender'];
-    const currentIndex = themes.indexOf(settings.theme);
-    const nextIndex = (currentIndex + 1) % themes.length;
-    setSettings({ ...settings, theme: themes[nextIndex] });
-  };
+  theme,
+  onToggleTheme
+}) => {
+  const [showDropdown, setShowDropdown] = useState(false);
 
-  const toggleLanguage = () => {
-    setSettings({ ...settings, language: settings.language === 'uz' ? 'en' : 'uz' });
-  };
-
-  // Translations
-  const t = {
-    reyting: settings.language === 'uz' ? 'Reyting' : 'Leaderboard',
-    asosiy: settings.language === 'uz' ? 'Asosiy' : 'Main Test',
-    bloglar: settings.language === 'uz' ? 'Bloglar' : 'Blogs',
-    donat: settings.language === 'uz' ? 'Donat qilish' : 'Donate',
-    dashboard: settings.language === 'uz' ? 'Dashboard' : 'Dashboard',
-    admin: settings.language === 'uz' ? 'Admin' : 'Admin Panel',
-    login: settings.language === 'uz' ? 'Google bilan kirish' : 'Login with Google',
-    logout: settings.language === 'uz' ? 'Chiqish' : 'Logout',
-    profile: settings.language === 'uz' ? 'Profil' : 'Profile',
+  const getLinkClass = (view: string) => {
+    const isActive = currentView === view;
+    return `text-sm font-medium transition-colors hover:text-white ${
+      isActive ? "text-white" : "text-neutral-400"
+    } cursor-pointer`;
   };
 
   return (
-    <nav className="border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-50 px-4 py-3 md:px-8">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-        
-        {/* Logo */}
-        <div 
-          onClick={() => setCurrentView('home')}
-          className="flex items-center gap-2 cursor-pointer group"
-          id="nav_logo"
-        >
-          <Keyboard className="w-8 h-8 text-yellow-500 group-hover:rotate-12 transition-transform duration-300" />
-          <span className="font-sans font-bold text-2xl tracking-wider text-white">
-            uzbek<span className="text-yellow-500 font-mono">type</span>
-          </span>
-        </div>
-
-        {/* Navigation Items */}
-        <div className="flex items-center gap-2 md:gap-4 overflow-x-auto max-w-full pb-1 md:pb-0">
-          <button
-            id="nav_asosiy"
-            onClick={() => setCurrentView('home')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-              currentView === 'home' || currentView === 'typing' || currentView === 'result'
-                ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            {t.asosiy}
-          </button>
-          
-          <button
-            id="nav_leaderboard"
-            onClick={() => setCurrentView('leaderboard')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-              currentView === 'leaderboard'
-                ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            {t.reyting}
-          </button>
-
-          <button
-            id="nav_blogs"
-            onClick={() => setCurrentView('blog')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-              currentView === 'blog'
-                ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            {t.bloglar}
-          </button>
-
-          {currentUser.uid !== 'guest_user' && (
-            <button
-              id="nav_dashboard"
-              onClick={() => setCurrentView('dashboard')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                currentView === 'dashboard'
-                  ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <span className="flex items-center gap-1">
-                <LayoutDashboard className="w-4 h-4" />
-                {t.dashboard}
-              </span>
-            </button>
-          )}
-
-          {currentUser.isAdmin && (
-            <button
-              id="nav_admin"
-              onClick={() => setCurrentView('admin')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                currentView === 'admin'
-                  ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-                  : 'text-red-400 hover:text-white hover:bg-red-500/20'
-              }`}
-            >
-              <span className="flex items-center gap-1">
-                <ShieldAlert className="w-4 h-4" />
-                {t.admin}
-              </span>
-            </button>
-          )}
-        </div>
-
-        {/* Action Controls & Auth */}
-        <div className="flex items-center gap-3">
-          {/* Support/Donate Button */}
-          <button
-            id="nav_donate"
-            onClick={() => alert(settings.language === 'uz' ? "Katta rahmat! Donat qilish imkoniyati tez orada ulanadi (Click/Payme/Stripe)." : "Thank you! Donation integration is coming soon.")}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-500/10 hover:bg-pink-500/25 text-pink-500 text-sm font-medium transition-all border border-pink-500/25 active:scale-95"
-          >
-            <Heart className="w-4 h-4 fill-pink-500" />
-            <span>{t.donat}</span>
-          </button>
-
-          {/* Theme switcher */}
-          <button
-            id="nav_theme"
-            onClick={cycleTheme}
-            className="p-2 rounded-lg bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-all active:scale-90"
-            title="Sichqonchani bosing va temani o'zgartiring"
-          >
-            <Palette className="w-4 h-4" />
-          </button>
-
-          {/* Language Switcher */}
-          <button
-            id="nav_lang"
-            onClick={toggleLanguage}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 text-xs font-mono transition-all active:scale-90"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>{settings.language.toUpperCase()}</span>
-          </button>
-
-          {/* Auth State */}
-          {currentUser.uid === 'guest_user' ? (
-            <button
-              id="nav_login"
-              onClick={onLogin}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500 text-black text-sm font-semibold hover:bg-yellow-400 transition-all shadow-md active:scale-95 cursor-pointer"
-            >
-              <LogIn className="w-4 h-4" />
-              <span className="hidden xs:inline">{t.login}</span>
-            </button>
-          ) : (
-            <div className="relative" id="nav_profile_dropdown_wrapper">
-              <div 
-                id="nav_profile_btn"
-                onClick={() => {
-                  const el = document.getElementById('nav_dropdown_menu');
-                  if (el) {
-                    el.classList.toggle('hidden');
-                  }
-                }}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 cursor-pointer transition-all active:scale-95 select-none"
-              >
-                <span className="text-lg">{currentUser.avatar}</span>
-                <span className="text-sm font-medium text-white max-w-[80px] truncate">{currentUser.username}</span>
-                <span className="text-[10px] text-gray-500">▼</span>
-              </div>
-              
-              {/* Dropdown Menu */}
-              <div 
-                id="nav_dropdown_menu"
-                className="absolute right-0 mt-2 w-48 rounded-xl bg-[#141414] border border-white/10 py-1.5 shadow-2xl z-50 hidden"
-              >
-                <button
-                  id="nav_dropdown_profile"
-                  onClick={() => {
-                    setCurrentView('profile');
-                    document.getElementById('nav_dropdown_menu')?.classList.add('hidden');
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center gap-2 transition-all"
-                >
-                  <User className="w-4 h-4 text-yellow-500" />
-                  <span>{settings.language === 'uz' ? 'Profil' : 'Profile'}</span>
-                </button>
-
-                <button
-                  id="nav_dropdown_stats"
-                  onClick={() => {
-                    setCurrentView('dashboard');
-                    document.getElementById('nav_dropdown_menu')?.classList.add('hidden');
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center gap-2 transition-all"
-                >
-                  <LayoutDashboard className="w-4 h-4 text-emerald-500" />
-                  <span>{settings.language === 'uz' ? 'Statistika' : 'Statistics'}</span>
-                </button>
-
-                <button
-                  id="nav_dropdown_leaderboard"
-                  onClick={() => {
-                    setCurrentView('leaderboard');
-                    document.getElementById('nav_dropdown_menu')?.classList.add('hidden');
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center gap-2 transition-all"
-                >
-                  <Award className="w-4 h-4 text-blue-500" />
-                  <span>{settings.language === 'uz' ? 'Reyting' : 'Leaderboard'}</span>
-                </button>
-
-                <div className="border-t border-white/5 my-1"></div>
-
-                <button
-                  id="nav_dropdown_logout"
-                  onClick={() => {
-                    onLogout();
-                    document.getElementById('nav_dropdown_menu')?.classList.add('hidden');
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2 transition-all"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>{settings.language === 'uz' ? 'Chiqish' : 'Logout'}</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-        </div>
+    <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between border-b border-neutral-900/50 bg-transparent">
+      {/* Brand Logo */}
+      <div 
+        onClick={() => onNavigate("home")} 
+        className="text-xl font-bold tracking-tight text-white cursor-pointer select-none flex items-center gap-1 hover:opacity-90"
+      >
+        uzbektype
       </div>
-    </nav>
+
+      {/* Navigation and Actions */}
+      <div className="flex items-center gap-6">
+        {/* Nav Links */}
+        <nav className="hidden md:flex items-center gap-6">
+          <div onClick={() => onNavigate("leaderboard")} className={getLinkClass("leaderboard")}>
+            🏆 Reyting
+          </div>
+          <div onClick={() => onNavigate("home")} className={getLinkClass("home")}>
+            Asosiy
+          </div>
+          <div onClick={() => onNavigate("blog")} className={getLinkClass("blog")}>
+            Bloglar
+          </div>
+        </nav>
+
+        {/* Support / Donate button */}
+        <button 
+          onClick={() => alert("Uzbektype loyihasini qo'llab-quvvatlaganingiz uchun rahmat! Ushbu funksiya tez orada ishga tushadi.")}
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-neutral-800 text-xs font-medium text-neutral-300 hover:bg-neutral-900 hover:text-white transition-all cursor-pointer"
+        >
+          <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500" />
+          <span>Donat qilish</span>
+        </button>
+
+        {/* Theme Toggler */}
+        <button 
+          onClick={onToggleTheme}
+          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors cursor-pointer"
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
+        </button>
+
+        {/* Language Flag Selector */}
+        <div className="flex items-center gap-1 text-sm bg-neutral-900/60 border border-neutral-800 px-2.5 py-1 rounded-md select-none">
+          <span className="text-xs">🇺🇿</span>
+          <span className="text-xs font-semibold text-neutral-300">UZ</span>
+        </div>
+
+        {/* CTA Boshlash Button */}
+        {currentView !== "test" && (
+          <button 
+            onClick={() => onNavigate("test")}
+            className="hidden sm:flex items-center gap-1.5 bg-white text-black hover:bg-neutral-200 font-semibold text-xs px-4 py-2 rounded-lg transition-all cursor-pointer"
+          >
+            <Play className="w-3 h-3 fill-black" />
+            <span>Boshlash</span>
+          </button>
+        )}
+
+        {/* Authentication Section */}
+        {user ? (
+          <div className="relative">
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="flex items-center gap-2 text-xs font-semibold text-neutral-300 hover:text-white bg-neutral-900/80 border border-neutral-800 px-3 py-1.5 rounded-lg transition-all cursor-pointer"
+            >
+              <PixelAvatar avatarId={user.avatar} size={20} className="border-0 bg-transparent rounded-sm" />
+              <span>{user.firstName} {user.lastName.substring(0, 1)}.</span>
+              <span className="text-[10px] text-neutral-500">▼</span>
+            </button>
+
+            {showDropdown && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setShowDropdown(false)}
+                />
+                <div className="absolute right-0 mt-2 w-48 rounded-xl border border-neutral-800 bg-[#121212] py-2 shadow-2xl z-20">
+                  <div className="px-4 py-2 border-b border-neutral-900">
+                    <p className="text-xs font-bold text-white truncate">{user.firstName} {user.lastName}</p>
+                    <p className="text-[10px] text-neutral-500 truncate">{user.email}</p>
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      onNavigate("profile");
+                      setShowDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs text-neutral-300 hover:bg-neutral-900 hover:text-white flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    <span>Profilni sozlash</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onNavigate("my-results");
+                      setShowDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs text-neutral-300 hover:bg-neutral-900 hover:text-white flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <BarChart2 className="w-3.5 h-3.5" />
+                    <span>Mening natijalarim</span>
+                  </button>
+
+                  <div className="h-px bg-neutral-900 my-1" />
+
+                  <button
+                    onClick={() => {
+                      onLogout();
+                      setShowDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-neutral-900 hover:text-red-300 flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Chiqish</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={onLogin}
+            className="flex items-center gap-1.5 border border-neutral-800 hover:border-neutral-700 bg-neutral-950 text-neutral-200 hover:text-white text-xs font-semibold px-4 py-2 rounded-lg transition-all cursor-pointer"
+          >
+            {/* Custom Google Icon */}
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+              <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+              />
+            </svg>
+            <span>Kirish</span>
+          </button>
+        )}
+      </div>
+    </header>
   );
-}
+};

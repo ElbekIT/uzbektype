@@ -1,469 +1,307 @@
-import React, { useState, useEffect } from 'react';
-import { UserProfile, UserSettings, TestResult } from './types';
-import { getCurrentUser, saveCurrentUser, initStorage, syncFirestoreToLocal } from './utils/storage';
-import { auth, googleProvider, db } from './utils/firebase';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import Navbar from './components/Navbar';
-import HomeView from './components/HomeView';
-import TypingView from './components/TypingView';
-import ResultView from './components/ResultView';
-import LeaderboardView from './components/LeaderboardView';
-import ProfileView from './components/ProfileView';
-import DashboardView from './components/DashboardView';
-import BlogView from './components/BlogView';
-import AdminView from './components/AdminView';
-import { Sparkles, X, Shield, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Navbar } from "./components/Navbar";
+import { HomeHero } from "./components/HomeHero";
+import { LeaderboardCard } from "./components/LeaderboardCard";
+import { TestEngine } from "./components/TestEngine";
+import { ResultView } from "./components/ResultView";
+import { ProfileView } from "./components/ProfileView";
+import { MyResultsView } from "./components/MyResultsView";
+import { LeaderboardView } from "./components/LeaderboardView";
+import { BlogView } from "./components/BlogView";
+import { auth, db, googleProvider } from "./firebase";
+import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, setDoc, addDoc, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore";
+import { Difficulty, UserProfile, TypingResult } from "./types";
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<UserProfile>(getCurrentUser());
-  const [settings, setSettings] = useState<UserSettings>({
-    theme: 'carbon',
-    language: 'uz',
-    typingSound: 'click',
-    showKeyboard: true,
-  });
+  const [currentView, setCurrentView] = useState<"home" | "test" | "result" | "profile" | "my-results" | "leaderboard" | "blog">("home");
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
-  // Navigation Routing States
-  const [currentView, setCurrentView] = useState<string>('home');
-  const [testDifficulty, setTestDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
-  const [testDuration, setTestDuration] = useState<number>(30);
-  const [lastResult, setLastResult] = useState<(TestResult & { wpmHistory: number[] }) | null>(null);
+  // Store statistics of the most recently finished typing test
+  const [lastStats, setLastStats] = useState<Omit<TypingResult, "uid" | "createdAt"> | null>(null);
+  const [lastTimeline, setLastTimeline] = useState<number[]>([]);
 
-  // Authentication Dialog Simulators/Fallbacks
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [loginUsername, setLoginUsername] = useState('');
-  const [loginAvatar, setLoginAvatar] = useState('👨‍💻');
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginRole, setLoginRole] = useState<'user' | 'admin'>('user');
-
-  // Load and save settings to Firestore and LocalStorage
+  // 1. Monitor Firebase Auth Session Changes
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('uzbektype_settings');
-      if (stored) {
-        setSettings(JSON.parse(stored));
-      }
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('uzbektype_settings', JSON.stringify(settings));
-    if (currentUser.uid !== 'guest_user') {
-      setDoc(doc(db, 'users', currentUser.uid), { settings }, { merge: true })
-        .catch(err => console.error('Error saving settings to Firestore:', err));
-    }
-  }, [settings, currentUser.uid]);
-
-  // Handle Firebase auth state changes
-  useEffect(() => {
-    initStorage();
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Authenticated user
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (u) {
         try {
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          let activeProfile: UserProfile;
+          const userRef = doc(db, "users", u.uid);
+          const snap = await getDoc(userRef);
 
-          if (!userDoc.exists()) {
-            activeProfile = {
-              uid: user.uid,
-              username: user.displayName || user.email?.split('@')[0] || 'User',
-              email: user.email || '',
-              avatar: '👨‍💻',
-              country: 'UZ',
-              createdAt: new Date().toISOString(),
-              bestWPM: 0,
-              averageWPM: 0,
-              accuracy: 0,
-              testsCount: 0,
-              streak: 1,
-              streakLastUpdated: new Date().toISOString().split('T')[0],
-              isAdmin: user.email === 'admin@uzbektype.uz' || user.email?.includes('admin'),
-            };
-            await setDoc(userDocRef, {
-              ...activeProfile,
-              displayName: user.displayName || activeProfile.username,
-              lastOnline: new Date().toISOString()
+          if (snap.exists()) {
+            const data = snap.data();
+            setUser({
+              uid: u.uid,
+              email: u.email || "",
+              firstName: data.firstName || "",
+              lastName: data.lastName || "",
+              avatar: data.avatar || "avatar_1",
+              createdAt: data.createdAt
             });
           } else {
-            activeProfile = userDoc.data() as UserProfile;
+            // Provision brand new profile
+            const fullName = u.displayName || "Yozuvchi Anonim";
+            const parts = fullName.split(" ");
+            const fName = parts[0] || "Yozuvchi";
+            const lName = parts.slice(1).join(" ") || "Anonim";
+            const randomAvatar = `avatar_${Math.floor(Math.random() * 6) + 1}`;
+
+            const freshProfile: UserProfile = {
+              uid: u.uid,
+              email: u.email || "",
+              firstName: fName,
+              lastName: lName,
+              avatar: randomAvatar,
+              createdAt: new Date()
+            };
+
+            await setDoc(userRef, {
+              uid: freshProfile.uid,
+              email: freshProfile.email,
+              firstName: freshProfile.firstName,
+              lastName: freshProfile.lastName,
+              avatar: freshProfile.avatar,
+              createdAt: freshProfile.createdAt
+            });
+
+            setUser(freshProfile);
           }
-
-          saveCurrentUser(activeProfile);
-          setCurrentUser(activeProfile);
-
-          // Full background sync
-          await syncFirestoreToLocal(user.uid);
-          
-          // Re-get from Local Cache in case sync retrieved more results
-          setCurrentUser(getCurrentUser());
-        } catch (error) {
-          console.error("Auth state change sync failed:", error);
+        } catch (err) {
+          console.error("Error setting up user profile from Firestore:", err);
         }
       } else {
-        // Guest user fallback
-        const guestUser = getCurrentUser();
-        if (guestUser.uid !== 'guest_user') {
-          const defaultGuest: UserProfile = {
-            uid: 'guest_user',
-            username: 'Siz_Guest',
-            email: 'mehmon@uzbektype.uz',
-            avatar: '👨‍💻',
-            country: 'UZ',
-            createdAt: new Date().toISOString(),
-            bestWPM: 0,
-            averageWPM: 0,
-            accuracy: 0,
-            testsCount: 0,
-            streak: 0,
-          };
-          localStorage.setItem('uzbektype_current_user', JSON.stringify(defaultGuest));
-          setCurrentUser(defaultGuest);
-        } else {
-          setCurrentUser(guestUser);
-        }
+        setUser(null);
       }
+      setLoadingAuth(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const handleGoogleSignIn = async () => {
+  // 2. Google Authentication Login popup
+  const handleLogin = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
-      let activeProfile: UserProfile;
-
-      if (!userDoc.exists()) {
-        activeProfile = {
-          uid: user.uid,
-          username: user.displayName || user.email?.split('@')[0] || 'User',
-          email: user.email || '',
-          avatar: '👨‍💻',
-          country: 'UZ',
-          createdAt: new Date().toISOString(),
-          bestWPM: 0,
-          averageWPM: 0,
-          accuracy: 0,
-          testsCount: 0,
-          streak: 1,
-          streakLastUpdated: new Date().toISOString().split('T')[0],
-          isAdmin: user.email === 'admin@uzbektype.uz' || user.email?.includes('admin'),
-        };
-        await setDoc(userDocRef, {
-          ...activeProfile,
-          displayName: user.displayName || activeProfile.username,
-          lastOnline: new Date().toISOString()
-        });
-      } else {
-        activeProfile = userDoc.data() as UserProfile;
+      const u = result.user;
+      if (u) {
+        // Handled reactively by onAuthStateChanged
       }
-
-      saveCurrentUser(activeProfile);
-      setCurrentUser(activeProfile);
-      await syncFirestoreToLocal(user.uid);
-      setCurrentView('dashboard');
     } catch (error) {
-      console.warn("Standard Google Auth popup blocked/failed. Showing sandbox-compatible demo fallback modal.", error);
-      setIsLoginModalOpen(true);
-    }
-  };
-
-  const handleDemoSignIn = async (role: 'user' | 'admin') => {
-    const demoUid = role === 'admin' ? 'demo_admin_uid' : 'demo_user_uid';
-    const demoUser: UserProfile = {
-      uid: demoUid,
-      username: role === 'admin' ? 'UzbekType_Admin' : 'Dasturchi_Uz',
-      email: role === 'admin' ? 'admin@uzbektype.uz' : 'dasturchi@gmail.com',
-      avatar: role === 'admin' ? '🛡️' : '⚡',
-      country: 'UZ',
-      createdAt: new Date().toISOString(),
-      bestWPM: 74,
-      averageWPM: 62,
-      accuracy: 97.4,
-      testsCount: 18,
-      streak: 4,
-      streakLastUpdated: new Date().toISOString().split('T')[0],
-      isAdmin: role === 'admin',
-    };
-
-    try {
-      const userDocRef = doc(db, 'users', demoUid);
-      await setDoc(userDocRef, {
-        ...demoUser,
-        displayName: demoUser.username,
-        lastOnline: new Date().toISOString()
-      }, { merge: true });
-
-      saveCurrentUser(demoUser);
-      setCurrentUser(demoUser);
-      await syncFirestoreToLocal(demoUid);
-      setIsLoginModalOpen(false);
-      setCurrentView('dashboard');
-    } catch (err) {
-      console.error('Error in demo sign in Firestore update:', err);
-      // Local fallback anyway
-      saveCurrentUser(demoUser);
-      setCurrentUser(demoUser);
-      setIsLoginModalOpen(false);
-      setCurrentView('dashboard');
+      console.error("Google authentication popup error:", error);
+      alert(
+        "Iframe cheklovlari sababli tizimga kirish oynasi bloklangan bo'lishi mumkin. To'liq ishlashi uchun saytni yangi tabda oching."
+      );
     }
   };
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      setUser(null);
+      setCurrentView("home");
     } catch (err) {
-      console.error("Logout failed:", err);
+      console.error("Signout failed:", err);
     }
-    const defaultGuest: UserProfile = {
-      uid: 'guest_user',
-      username: 'Siz_Guest',
-      email: 'mehmon@uzbektype.uz',
-      avatar: '👨‍💻',
-      country: 'UZ',
-      createdAt: new Date().toISOString(),
-      bestWPM: 0,
-      averageWPM: 0,
-      accuracy: 0,
-      testsCount: 0,
-      streak: 0,
-    };
-    localStorage.setItem('uzbektype_current_user', JSON.stringify(defaultGuest));
-    setCurrentUser(defaultGuest);
-    setCurrentView('home');
   };
 
-  // Determine active theme color variables
-  const getThemeClasses = () => {
-    switch (settings.theme) {
-      case 'cyberpunk':
-        return {
-          bg: 'bg-[#0a0c14]',
-          text: 'text-gray-100',
-          accentText: 'text-pink-500',
-          accentBg: 'bg-pink-500',
-          accentBorder: 'border-pink-500/20',
-          accentFill: 'fill-pink-500',
-          navbarText: 'text-white',
-          themeGlow: 'bg-pink-500/5',
-        };
-      case 'serene':
-        return {
-          bg: 'bg-[#f5f6f8]',
-          text: 'text-gray-800',
-          accentText: 'text-emerald-700',
-          accentBg: 'bg-emerald-700',
-          accentBorder: 'border-emerald-700/10',
-          accentFill: 'fill-emerald-700',
-          navbarText: 'text-gray-900',
-          themeGlow: 'bg-emerald-700/5',
-        };
-      case 'lavender':
-        return {
-          bg: 'bg-[#0e0a1b]',
-          text: 'text-gray-200',
-          accentText: 'text-purple-400',
-          accentBg: 'bg-purple-600',
-          accentBorder: 'border-purple-600/20',
-          accentFill: 'fill-purple-400',
-          navbarText: 'text-white',
-          themeGlow: 'bg-purple-600/5',
-        };
-      case 'carbon':
+  // 3. Typing score handler (calculates & submits to DB)
+  const handleTestComplete = async (
+    stats: Omit<TypingResult, "uid" | "createdAt">,
+    timeline: number[]
+  ) => {
+    setLastStats(stats);
+    setLastTimeline(timeline);
+    setCurrentView("result");
+
+    // If user is authenticated, save score to DB real-time
+    if (auth.currentUser) {
+      const currentUid = auth.currentUser.uid;
+      try {
+        // Save result record
+        const resultsRef = collection(db, "results");
+        await addDoc(resultsRef, {
+          uid: currentUid,
+          wpm: stats.wpm,
+          accuracy: stats.accuracy,
+          raw: stats.raw,
+          consistency: stats.consistency,
+          difficulty: stats.difficulty,
+          time: stats.time,
+          createdAt: serverTimestamp()
+        });
+
+        // Check/Update personal records on the Leaderboard collection
+        const leaderboardRef = collection(db, "leaderboard");
+        const q = query(
+          leaderboardRef,
+          where("uid", "==", currentUid),
+          where("difficulty", "==", stats.difficulty)
+        );
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          // Create entry
+          await addDoc(leaderboardRef, {
+            uid: currentUid,
+            username: user ? `${user.firstName} ${user.lastName}` : "Yozuvchi",
+            avatar: user ? user.avatar : "avatar_1",
+            wpm: stats.wpm,
+            accuracy: stats.accuracy,
+            raw: stats.raw,
+            consistency: stats.consistency,
+            difficulty: stats.difficulty,
+            time: stats.time,
+            createdAt: serverTimestamp()
+          });
+        } else {
+          // If current score is higher than their best, update
+          const bestDoc = snap.docs[0];
+          const bestWpm = bestDoc.data().wpm || 0;
+          if (stats.wpm > bestWpm) {
+            const docRef = doc(db, "leaderboard", bestDoc.id);
+            await setDoc(
+              docRef,
+              {
+                username: user ? `${user.firstName} ${user.lastName}` : "Yozuvchi",
+                avatar: user ? user.avatar : "avatar_1",
+                wpm: stats.wpm,
+                accuracy: stats.accuracy,
+                raw: stats.raw,
+                consistency: stats.consistency,
+                time: stats.time,
+                createdAt: serverTimestamp()
+              },
+              { merge: true }
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Firestore writing error:", err);
+      }
+    }
+  };
+
+  const handleProfileUpdated = (updatedUser: UserProfile) => {
+    setUser(updatedUser);
+  };
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  };
+
+  // Main UI router switch
+  const renderView = () => {
+    switch (currentView) {
+      case "home":
+        return (
+          <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-12 py-6">
+            <HomeHero onStartTest={() => setCurrentView("test")} />
+            <LeaderboardCard
+              user={user}
+              onLogin={handleLogin}
+              onViewAll={() => setCurrentView("leaderboard")}
+            />
+          </div>
+        );
+
+      case "test":
+        return (
+          <TestEngine
+            initialTime={30}
+            initialDifficulty={Difficulty.EASY}
+            onComplete={handleTestComplete}
+            onNavigateHome={() => setCurrentView("home")}
+          />
+        );
+
+      case "result":
+        if (!lastStats) {
+          setCurrentView("home");
+          return null;
+        }
+        return (
+          <ResultView
+            stats={lastStats}
+            timeline={lastTimeline}
+            user={user}
+            onLogin={handleLogin}
+            onRestart={() => setCurrentView("test")}
+            onNavigate={(v) => setCurrentView(v)}
+          />
+        );
+
+      case "profile":
+        if (!user) {
+          setCurrentView("home");
+          return null;
+        }
+        return (
+          <ProfileView
+            user={user}
+            onProfileUpdated={handleProfileUpdated}
+            onNavigate={(v) => setCurrentView(v)}
+          />
+        );
+
+      case "my-results":
+        if (!user) {
+          setCurrentView("home");
+          return null;
+        }
+        return (
+          <MyResultsView
+            user={user}
+            onStartNewTest={() => setCurrentView("test")}
+          />
+        );
+
+      case "leaderboard":
+        return <LeaderboardView />;
+
+      case "blog":
+        return <BlogView />;
+
       default:
-        return {
-          bg: 'bg-[#111111]',
-          text: 'text-gray-200',
-          accentText: 'text-yellow-500',
-          accentBg: 'bg-yellow-500',
-          accentBorder: 'border-yellow-500/20',
-          accentFill: 'fill-yellow-500',
-          navbarText: 'text-white',
-          themeGlow: 'bg-yellow-500/5',
-        };
+        return null;
     }
   };
 
-  const currentTheme = getThemeClasses();
+  // Outer template styling depending on theme selection (Obsidian dark vs Warm Slate light)
+  const appBg = theme === "dark" ? "bg-[#050505] text-white" : "bg-[#f5f5f5] text-neutral-900";
+  const contentBg = theme === "dark" ? "bg-[#000000]/20" : "bg-white/80";
 
   return (
-    <div className={`min-h-screen ${currentTheme.bg} ${currentTheme.text} font-sans transition-colors duration-300 flex flex-col justify-between selection:bg-yellow-500/30 selection:text-white relative`}>
-      
-      {/* Background themed subtle ambient blob */}
-      <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[400px] ${currentTheme.themeGlow} blur-[120px] rounded-full pointer-events-none`}></div>
-
-      {/* Navigation Header */}
+    <div className={`min-h-screen ${appBg} transition-all duration-300 flex flex-col font-sans`}>
       <Navbar
-        currentUser={currentUser}
-        settings={settings}
-        setSettings={setSettings}
         currentView={currentView}
-        setCurrentView={setCurrentView}
-        onLogin={() => setIsLoginModalOpen(true)}
+        onNavigate={(view) => setCurrentView(view)}
+        user={user}
+        onLogin={handleLogin}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
-      {/* Pages Container */}
-      <main className="flex-1 w-full relative z-10">
-        
-        {currentView === 'home' && (
-          <HomeView
-            currentUser={currentUser}
-            settings={settings}
-            setSettings={setSettings}
-            setCurrentView={setCurrentView}
-            onLogin={() => setIsLoginModalOpen(true)}
-            setTestOptions={(opts) => {
-              setTestDifficulty(opts.difficulty);
-              setTestDuration(opts.duration);
-            }}
-          />
+      <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-6 md:py-12 flex flex-col justify-center">
+        {loadingAuth ? (
+          <div className="w-full flex flex-col items-center justify-center gap-4 py-24 select-none">
+            <div className="w-10 h-10 rounded-full border-t-2 border-r-2 border-white animate-spin" />
+            <span className="text-xs font-semibold text-neutral-400 uppercase tracking-widest font-mono">
+              Sessiya yuklanmoqda...
+            </span>
+          </div>
+        ) : (
+          renderView()
         )}
-
-        {currentView === 'typing' && (
-          <TypingView
-            currentUser={currentUser}
-            settings={settings}
-            setSettings={setSettings}
-            setCurrentView={setCurrentView}
-            difficulty={testDifficulty}
-            duration={testDuration}
-            setLastResult={setLastResult}
-          />
-        )}
-
-        {currentView === 'result' && lastResult && (
-          <ResultView
-            currentUser={currentUser}
-            settings={settings}
-            lastResult={lastResult}
-            setCurrentView={setCurrentView}
-            onRestart={() => setCurrentView('typing')}
-          />
-        )}
-
-        {currentView === 'leaderboard' && (
-          <LeaderboardView
-            currentUser={currentUser}
-            settings={settings}
-          />
-        )}
-
-        {currentView === 'profile' && (
-          <ProfileView
-            currentUser={currentUser}
-            settings={settings}
-            setCurrentUser={setCurrentUser}
-          />
-        )}
-
-        {currentView === 'dashboard' && (
-          <DashboardView
-            currentUser={currentUser}
-            settings={settings}
-            setCurrentView={setCurrentView}
-          />
-        )}
-
-        {currentView === 'blog' && (
-          <BlogView
-            currentUser={currentUser}
-            settings={settings}
-          />
-        )}
-
-        {currentView === 'admin' && (
-          <AdminView
-            currentUser={currentUser}
-            settings={settings}
-          />
-        )}
-
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-white/5 py-6 bg-black/20 text-center text-xs font-mono text-gray-500 relative z-10">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© 2026 UzbekType. Barcha huquqlar himoyalangan.</p>
-          <div className="flex gap-4">
-            <span className="hover:text-gray-300 cursor-pointer">Maxfiylik siyosati</span>
-            <span>•</span>
-            <span className="hover:text-gray-300 cursor-pointer">Foydalanish shartlari</span>
-            <span>•</span>
-            <span className="hover:text-gray-300 cursor-pointer" onClick={() => alert("Aloqa: info@uzbektype.uz")}>Aloqa</span>
-          </div>
-        </div>
+      {/* Footer footer labels - exact clean text */}
+      <footer className="w-full py-8 text-center border-t border-neutral-900/40 select-none text-neutral-600 text-[10px] font-mono">
+        &copy; {new Date().getFullYear()} Uzbektype. Barcha huquqlar himoyalangan.
       </footer>
-
-      {/* Google Authentication Dialog */}
-      {isLoginModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-          <div className="bg-[#121212] border border-white/10 rounded-2xl p-6 md:p-8 w-full max-w-md shadow-2xl relative overflow-hidden">
-            
-            {/* Ambient vector decoration */}
-            <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-500/5 blur-2xl rounded-full"></div>
-
-            <button 
-              onClick={() => setIsLoginModalOpen(false)}
-              className="absolute top-4 right-4 p-1.5 bg-black/40 rounded-full text-gray-500 hover:text-white border border-white/5 transition-all cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            {/* Modal Heading */}
-            <div className="text-center space-y-2 mb-6">
-              <span className="text-3xl">🔑</span>
-              <h3 className="font-sans font-extrabold text-xl text-white">UzbekType Tizimiga Kirish</h3>
-              <p className="text-xs text-gray-400">Google orqali kiring va natijalaringizni real vaqtda saqlab boring.</p>
-            </div>
-
-            {/* Real vs Sandbox Options */}
-            <div className="space-y-4">
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black font-extrabold text-sm transition-all shadow-lg active:scale-95 cursor-pointer"
-              >
-                <span>Google account orqali kirish</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-
-              <div className="relative flex py-2 items-center">
-                <div className="flex-grow border-t border-white/5"></div>
-                <span className="flex-shrink mx-3 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Yoki Tezkor Demo (Iframe uchun)</span>
-                <div className="flex-grow border-t border-white/5"></div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleDemoSignIn('user')}
-                  className="py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/5 text-xs font-bold transition-all active:scale-95 text-center flex flex-col items-center gap-1.5 cursor-pointer"
-                >
-                  <span className="text-lg">⚡</span>
-                  <span>Oddiy Foydalanuvchi</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDemoSignIn('admin')}
-                  className="py-3 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/10 text-xs font-bold transition-all active:scale-95 text-center flex flex-col items-center gap-1.5 cursor-pointer"
-                >
-                  <Shield className="w-5 h-5 text-red-500" />
-                  <span>Admin Panel</span>
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
-  "name": "UzbekType",
-  "description": "Premium modern typing speed test application tailored for Uzbek language with leaderboards, profile, and blog.",
+  "name": "Uzbektype",
+  "description": "Professional Uzbek typing website with live leaderboard, customizable themes, animation speeds, and detailed performance history.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
