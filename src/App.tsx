@@ -8,7 +8,7 @@ import { ProfileView } from "./components/ProfileView";
 import { MyResultsView } from "./components/MyResultsView";
 import { LeaderboardView } from "./components/LeaderboardView";
 import { BlogView } from "./components/BlogView";
-import { auth, db, googleProvider } from "./firebase";
+import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore";
 import { Difficulty, UserProfile, TypingResult } from "./types";
@@ -18,6 +18,8 @@ export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Store statistics of the most recently finished typing test
   const [lastStats, setLastStats] = useState<Omit<TypingResult, "uid" | "createdAt"> | null>(null);
@@ -125,71 +127,127 @@ export default function App() {
     setLastStats(stats);
     setLastTimeline(timeline);
     setCurrentView("result");
+    setSaveError(null);
 
     // If user is authenticated, save score to DB real-time
     if (auth.currentUser) {
       const currentUid = auth.currentUser.uid;
+      setIsSaving(true);
       try {
         // Save result record
         const resultsRef = collection(db, "results");
-        await addDoc(resultsRef, {
+
+        // Build document matching user requirements exactly + supporting backwards compatibility fields
+        const resultDocPayload = {
+          // Standard keys
           uid: currentUid,
+          username: user ? `${user.firstName} ${user.lastName}` : "Yozuvchi",
+          firstName: user ? user.firstName : "Yozuvchi",
+          lastName: user ? user.lastName : "Anonim",
+          avatar: user ? user.avatar : "avatar_1",
+          email: user ? user.email : (auth.currentUser.email || ""),
           wpm: stats.wpm,
           accuracy: stats.accuracy,
           raw: stats.raw,
           consistency: stats.consistency,
           difficulty: stats.difficulty,
           time: stats.time,
-          createdAt: serverTimestamp()
-        });
+          createdAt: serverTimestamp(),
+          
+          // Exact casing requested by user
+          WPM: stats.wpm,
+          "Raw WPM": stats.raw,
+          Accuracy: stats.accuracy,
+          Consistency: stats.consistency,
+          Time: stats.time,
+          Difficulty: stats.difficulty,
+          "Test Mode": "time",
+          Timestamp: serverTimestamp()
+        };
+
+        await addDoc(resultsRef, resultDocPayload);
 
         // Check/Update personal records on the Leaderboard collection
         const leaderboardRef = collection(db, "leaderboard");
         const q = query(
           leaderboardRef,
-          where("uid", "==", currentUid),
-          where("difficulty", "==", stats.difficulty)
+          where("uid", "==", currentUid)
         );
         const snap = await getDocs(q);
 
+        // Determine if this new score is better than previous best score
+        let shouldUpdate = false;
+
         if (snap.empty) {
-          // Create entry
-          await addDoc(leaderboardRef, {
+          shouldUpdate = true;
+        } else {
+          const existingDoc = snap.docs[0];
+          const existingData = existingDoc.data();
+
+          const existingWpm = Number(existingData.wpm) || 0;
+          const existingAccuracy = Number(existingData.accuracy) || 0;
+          const existingConsistency = Number(existingData.consistency) || 0;
+
+          // Checking priority list for ranking:
+          // 1. Highest WPM
+          // 2. Highest Accuracy
+          // 3. Highest Consistency
+          if (stats.wpm > existingWpm) {
+            shouldUpdate = true;
+          } else if (stats.wpm === existingWpm) {
+            if (stats.accuracy > existingAccuracy) {
+              shouldUpdate = true;
+            } else if (stats.accuracy === existingAccuracy) {
+              if (stats.consistency > existingConsistency) {
+                shouldUpdate = true;
+              }
+            }
+          }
+        }
+
+        if (shouldUpdate) {
+          // Build leaderboard document matching required properties and caching info
+          const leaderboardDocPayload = {
             uid: currentUid,
             username: user ? `${user.firstName} ${user.lastName}` : "Yozuvchi",
+            firstName: user ? user.firstName : "Yozuvchi",
+            lastName: user ? user.lastName : "Anonim",
             avatar: user ? user.avatar : "avatar_1",
+            email: user ? user.email : (auth.currentUser.email || ""),
             wpm: stats.wpm,
             accuracy: stats.accuracy,
             raw: stats.raw,
             consistency: stats.consistency,
             difficulty: stats.difficulty,
             time: stats.time,
-            createdAt: serverTimestamp()
-          });
-        } else {
-          // If current score is higher than their best, update
-          const bestDoc = snap.docs[0];
-          const bestWpm = bestDoc.data().wpm || 0;
-          if (stats.wpm > bestWpm) {
-            const docRef = doc(db, "leaderboard", bestDoc.id);
-            await setDoc(
-              docRef,
-              {
-                username: user ? `${user.firstName} ${user.lastName}` : "Yozuvchi",
-                avatar: user ? user.avatar : "avatar_1",
-                wpm: stats.wpm,
-                accuracy: stats.accuracy,
-                raw: stats.raw,
-                consistency: stats.consistency,
-                time: stats.time,
-                createdAt: serverTimestamp()
-              },
-              { merge: true }
-            );
-          }
+            createdAt: serverTimestamp(),
+
+            // Exact casing requested
+            WPM: stats.wpm,
+            "Raw WPM": stats.raw,
+            Accuracy: stats.accuracy,
+            Consistency: stats.consistency,
+            Time: stats.time,
+            Difficulty: stats.difficulty,
+            "Test Mode": "time",
+            Timestamp: serverTimestamp()
+          };
+
+          const docRef = doc(db, "leaderboard", currentUid);
+          await setDoc(docRef, leaderboardDocPayload);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Firestore writing error:", err);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        setSaveError(errorMessage);
+        // Propagate error details to diagnosis tools
+        try {
+          handleFirestoreError(err, OperationType.WRITE, `results_and_leaderboard/${currentUid}`);
+        } catch (e) {
+          // do not crash applet thread, let UI display error
+        }
+      } finally {
+        setIsSaving(false);
       }
     }
   };
@@ -240,6 +298,7 @@ export default function App() {
             onLogin={handleLogin}
             onRestart={() => setCurrentView("test")}
             onNavigate={(v) => setCurrentView(v)}
+            saveError={saveError}
           />
         );
 

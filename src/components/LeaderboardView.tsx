@@ -7,6 +7,8 @@ import { Users, Zap, Award, BarChart2 } from "lucide-react";
 
 export const LeaderboardView: React.FC = () => {
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
+  const [userProfiles, setUserProfiles] = useState<Record<string, any>>({});
+  const [rawBoard, setRawBoard] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Owner statistics states (fully real-time from Firestore)
@@ -15,15 +17,60 @@ export const LeaderboardView: React.FC = () => {
   const [globalAverageSpeed, setGlobalAverageSpeed] = useState(0);
   const [globalMaxSpeed, setGlobalMaxSpeed] = useState(0);
 
-  useEffect(() => {
-    // 1. Fetch live leaderboard entries
-    const leaderboardRef = collection(db, "leaderboard");
-    const q = query(leaderboardRef, orderBy("wpm", "desc"), limit(25));
+  // Helper function to extract milliseconds safely from Firestore Timestamp
+  const getTimestampMs = (entry: any) => {
+    if (entry.createdAt) {
+      if (typeof entry.createdAt.toMillis === "function") {
+        return entry.createdAt.toMillis();
+      }
+      if (entry.createdAt.seconds) {
+        return entry.createdAt.seconds * 1000;
+      }
+    }
+    return 0;
+  };
 
-    const unsubscribe = onSnapshot(
-      q,
+  // Sorting function according to priority list:
+  // - Highest WPM first.
+  // - If WPM is the same, higher Accuracy ranks higher.
+  // - If both are the same, higher Consistency ranks higher.
+  // - Finally, use the newest timestamp as the tie-breaker.
+  const sortLeaderboard = (a: any, b: any) => {
+    if (b.wpm !== a.wpm) {
+      return b.wpm - a.wpm;
+    }
+    if (b.accuracy !== a.accuracy) {
+      return b.accuracy - a.accuracy;
+    }
+    if (b.consistency !== a.consistency) {
+      return b.consistency - a.consistency;
+    }
+    return getTimestampMs(b) - getTimestampMs(a);
+  };
+
+  useEffect(() => {
+    // 1. Listen to real-time user profiles with graceful error handling
+    const usersRef = collection(db, "users");
+    const unsubUsers = onSnapshot(
+      usersRef,
       (snapshot) => {
-        const items: LeaderboardEntry[] = [];
+        const profiles: Record<string, any> = {};
+        snapshot.forEach((docSnap) => {
+          profiles[docSnap.id] = docSnap.data();
+        });
+        setUserProfiles(profiles);
+      },
+      (error) => {
+        console.warn("Firestore users snapshot failed (expected for guests):", error);
+      }
+    );
+
+    // 2. Fetch live leaderboard entries
+    const leaderboardRef = collection(db, "leaderboard");
+    const unsubLeaderboard = onSnapshot(
+      leaderboardRef,
+      (snapshot) => {
+        const items: any[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
           items.push({
@@ -31,31 +78,26 @@ export const LeaderboardView: React.FC = () => {
             uid: data.uid || "",
             username: data.username || "Anonim",
             avatar: data.avatar || "avatar_1",
-            wpm: data.wpm || 0,
-            accuracy: data.accuracy || 0,
-            raw: data.raw || 0,
-            consistency: data.consistency || 0,
+            wpm: Number(data.wpm) || 0,
+            accuracy: Number(data.accuracy) || 0,
+            raw: Number(data.raw) || 0,
+            consistency: Number(data.consistency) || 0,
             difficulty: data.difficulty || Difficulty.EASY,
-            time: data.time || 30,
-            date: data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString("en-US", {
-              day: 'numeric', month: 'short', year: 'numeric'
-            }) : "Hozir"
+            time: Number(data.time) || 30,
+            createdAt: data.createdAt
           });
         });
-
-        // Final sorting descending
-        items.sort((a, b) => b.wpm - a.wpm);
-        setBoard(items);
+        setRawBoard(items);
         setLoading(false);
       },
       (error) => {
         console.warn("Firestore snapshot error:", error);
-        setBoard([]);
+        setRawBoard([]);
         setLoading(false);
       }
     );
 
-    // 2. Fetch direct stats from Firestore collections to populate Owner features in real time
+    // 3. Fetch direct stats from Firestore collections to populate Owner features in real time
     const fetchGlobalStats = async () => {
       try {
         const usersSnap = await getDocs(collection(db, "users"));
@@ -80,14 +122,43 @@ export const LeaderboardView: React.FC = () => {
           setGlobalMaxSpeed(0);
         }
       } catch (err) {
-        console.error("Error loading global statistics:", err);
+        console.warn("Error loading global statistics (expected for guests/non-owners):", err);
       }
     };
 
     fetchGlobalStats();
 
-    return () => unsubscribe();
+    return () => {
+      unsubUsers();
+      unsubLeaderboard();
+    };
   }, []);
+
+  // Sync state merging live user profiles & leaderboard entries with cached fallbacks
+  useEffect(() => {
+    const processed: LeaderboardEntry[] = [];
+    rawBoard.forEach((entry) => {
+      const profile = userProfiles[entry.uid];
+      processed.push({
+        id: entry.id,
+        uid: entry.uid,
+        username: profile ? `${profile.firstName} ${profile.lastName}` : (entry.username || "Anonim"),
+        avatar: profile ? (profile.avatar || "avatar_1") : (entry.avatar || "avatar_1"),
+        wpm: entry.wpm,
+        accuracy: entry.accuracy,
+        raw: entry.raw,
+        consistency: entry.consistency,
+        difficulty: entry.difficulty,
+        time: entry.time,
+        date: entry.createdAt ? new Date(entry.createdAt.seconds * 1000).toLocaleDateString("en-US", {
+          day: 'numeric', month: 'short', year: 'numeric'
+        }) : "Hozir"
+      });
+    });
+
+    processed.sort(sortLeaderboard);
+    setBoard(processed);
+  }, [rawBoard, userProfiles]);
 
   return (
     <div className="w-full max-w-5xl mx-auto py-6 px-4 flex flex-col gap-8">
@@ -160,13 +231,14 @@ export const LeaderboardView: React.FC = () => {
               <th className="py-3.5 px-4 text-right">accuracy</th>
               <th className="py-3.5 px-4 text-right">raw</th>
               <th className="py-3.5 px-4 text-right">consistency</th>
+              <th className="py-3.5 px-4 text-right">vaqt</th>
               <th className="py-3.5 px-4 text-right pr-6">sana</th>
             </tr>
           </thead>
           <tbody>
             {board.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-16 text-center text-neutral-500 font-mono text-xs select-none">
+                <td colSpan={8} className="py-16 text-center text-neutral-500 font-mono text-xs select-none">
                   Hozircha reytinglar yo'q. Birinchi bo'lib testni yakunlang va o'z natijangizni kiriting!
                 </td>
               </tr>
@@ -215,6 +287,11 @@ export const LeaderboardView: React.FC = () => {
                     {/* Consistency */}
                     <td className="py-4 px-4 text-right text-neutral-500">
                       {entry.consistency.toFixed(1)}%
+                    </td>
+
+                    {/* Test Time */}
+                    <td className="py-4 px-4 text-right text-neutral-500">
+                      {entry.time}s
                     </td>
 
                     {/* Date */}

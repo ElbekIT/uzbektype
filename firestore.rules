@@ -23,7 +23,7 @@ service cloud.firestore {
     // Users Collection Rules (Pillar 2 & 6)
     match /users/{userId} {
       // Leaderboard requires reading other profiles, but we restrict write to owners only
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isOwner(userId) 
         && request.resource.data.uid == userId
         && request.resource.data.firstName is string 
@@ -45,8 +45,8 @@ service cloud.firestore {
 
     // Results Collection Rules (Pillar 5, 8 & 12)
     match /results/{resultId} {
-      // Users can query/list their own results
-      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      // Anyone can query/list public results for statistics and trends
+      allow read: if true;
       
       // Allow creation of results tied to user's authenticated UID
       allow create: if isSignedIn() 

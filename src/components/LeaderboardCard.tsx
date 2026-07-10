@@ -19,22 +19,70 @@ export const LeaderboardCard: React.FC<LeaderboardCardProps> = ({
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.EASY);
   const [timeframe, setTimeframe] = useState<Timeframe>(Timeframe.WEEKLY);
   const [players, setPlayers] = useState<LeaderboardEntry[]>([]);
+  const [userProfiles, setUserProfiles] = useState<Record<string, any>>({});
+  const [rawPlayers, setRawPlayers] = useState<any[]>([]);
+
+  // Helper function to extract milliseconds safely from Firestore Timestamp
+  const getTimestampMs = (entry: any) => {
+    if (entry.createdAt) {
+      if (typeof entry.createdAt.toMillis === "function") {
+        return entry.createdAt.toMillis();
+      }
+      if (entry.createdAt.seconds) {
+        return entry.createdAt.seconds * 1000;
+      }
+    }
+    return 0;
+  };
+
+  // Sorting function according to priority list:
+  // - Highest WPM first.
+  // - If WPM is the same, higher Accuracy ranks higher.
+  // - If both are the same, higher Consistency ranks higher.
+  // - Finally, use the newest timestamp as the tie-breaker.
+  const sortLeaderboard = (a: any, b: any) => {
+    if (b.wpm !== a.wpm) {
+      return b.wpm - a.wpm;
+    }
+    if (b.accuracy !== a.accuracy) {
+      return b.accuracy - a.accuracy;
+    }
+    if (b.consistency !== a.consistency) {
+      return b.consistency - a.consistency;
+    }
+    return getTimestampMs(b) - getTimestampMs(a);
+  };
 
   // Listen to Firestore collection 'leaderboard' for real-time scores
   useEffect(() => {
+    // 1. Listen to real-time user profiles with graceful error handling
+    const usersRef = collection(db, "users");
+    const unsubUsers = onSnapshot(
+      usersRef,
+      (snapshot) => {
+        const profiles: Record<string, any> = {};
+        snapshot.forEach((docSnap) => {
+          profiles[docSnap.id] = docSnap.data();
+        });
+        setUserProfiles(profiles);
+      },
+      (error) => {
+        console.warn("Firestore users snapshot failed (expected for guests):", error);
+      }
+    );
+
+    // 2. Query scores filtered by selected difficulty
     const leaderboardRef = collection(db, "leaderboard");
-    // Query top 10 scores filtered by selected difficulty
     const q = query(
       leaderboardRef,
       where("difficulty", "==", difficulty),
-      orderBy("wpm", "desc"),
-      limit(10)
+      limit(50) // Fetch larger set to allow profile filtering
     );
 
-    const unsubscribe = onSnapshot(
+    const unsubLeaderboard = onSnapshot(
       q,
       (snapshot) => {
-        const livePlayers: LeaderboardEntry[] = [];
+        const livePlayers: any[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
           livePlayers.push({
@@ -42,28 +90,53 @@ export const LeaderboardCard: React.FC<LeaderboardCardProps> = ({
             uid: data.uid || "",
             username: data.username || "Anonim",
             avatar: data.avatar || "avatar_1",
-            wpm: data.wpm || 0,
-            accuracy: data.accuracy || 0,
-            raw: data.raw || 0,
-            consistency: data.consistency || 0,
+            wpm: Number(data.wpm) || 0,
+            accuracy: Number(data.accuracy) || 0,
+            raw: Number(data.raw) || 0,
+            consistency: Number(data.consistency) || 0,
             difficulty: data.difficulty || Difficulty.EASY,
-            time: data.time || 30,
-            date: data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString() : "Hozir"
+            time: Number(data.time) || 30,
+            createdAt: data.createdAt
           });
         });
-
-        // Ensure we sort descending by WPM
-        livePlayers.sort((a, b) => b.wpm - a.wpm);
-        setPlayers(livePlayers);
+        setRawPlayers(livePlayers);
       },
       (error) => {
         console.warn("Firestore leaderboard fetch failed:", error);
-        setPlayers([]);
+        setRawPlayers([]);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubUsers();
+      unsubLeaderboard();
+    };
   }, [difficulty]);
+
+  // Merge and sort in real-time with automatic cached fallbacks
+  useEffect(() => {
+    const processed: LeaderboardEntry[] = [];
+    rawPlayers.forEach((player) => {
+      const profile = userProfiles[player.uid];
+      processed.push({
+        id: player.id,
+        uid: player.uid,
+        username: profile ? `${profile.firstName} ${profile.lastName}` : (player.username || "Anonim"),
+        avatar: profile ? (profile.avatar || "avatar_1") : (player.avatar || "avatar_1"),
+        wpm: player.wpm,
+        accuracy: player.accuracy,
+        raw: player.raw,
+        consistency: player.consistency,
+        difficulty: player.difficulty,
+        time: player.time,
+        date: player.createdAt ? new Date(player.createdAt.seconds * 1000).toLocaleDateString() : "Hozir"
+      });
+    });
+
+    processed.sort(sortLeaderboard);
+    // Limit to top 10 for the card widget
+    setPlayers(processed.slice(0, 10));
+  }, [rawPlayers, userProfiles]);
 
   const getRankIndicator = (index: number) => {
     if (index === 0) return <span className="text-yellow-500">🥇</span>;

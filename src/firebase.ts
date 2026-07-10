@@ -18,14 +18,12 @@ import {
 import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAGUfqFnP1R__rX4wiWfYMLF-z74rG3ucQ",
-  authDomain: "typing-euro.firebaseapp.com",
-  databaseURL: "https://typing-euro-default-rtdb.firebaseio.com",
-  projectId: "typing-euro",
-  storageBucket: "typing-euro.firebasestorage.app",
-  messagingSenderId: "595263740564",
-  appId: "1:595263740564:web:224a293689db4fe679f281",
-  measurementId: "G-Y0X828SHR9"
+  apiKey: "AIzaSyB4l7qyyzOo03OlfWlBldRsAH2ML6DHfH4",
+  authDomain: "gen-lang-client-0804346655.firebaseapp.com",
+  projectId: "gen-lang-client-0804346655",
+  storageBucket: "gen-lang-client-0804346655.firebasestorage.app",
+  messagingSenderId: "659663918863",
+  appId: "1:659663918863:web:d16266ce625b650c7a107a"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -38,7 +36,7 @@ try {
   console.warn("Analytics initialization skipped:", e);
 }
 
-export const db = getFirestore(app);
+export const db = getFirestore(app, "ai-studio-uzbektype-e4bfdd26-faf0-4dd7-943e-6351bdd5d66d");
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
@@ -98,7 +96,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 // Test Connection on Boot as mandated by Skill
 export async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await getDocFromServer(doc(db, 'leaderboard', 'test_connection'));
     console.log("Firebase connection successfully tested.");
   } catch (error: any) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
